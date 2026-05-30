@@ -1,0 +1,21 @@
+[2026-05-20 11:49:30] ERROR: Error pairing code: Cannot read properties of null (reading 'requestPairingCode')
+[2026-05-20 11:52:14] ERROR: Error pairing code: Cannot read properties of null (reading 'requestPairingCode')
+[2026-05-20 12:04:15] ERROR: Error pairing code: Cannot read properties of null (reading 'requestPairingCode')
+[2026-05-20 12:05:15] ERROR: Error pairing code: Cannot read properties of null (reading 'requestPairingCode')
+[2026-05-20 12:05:35] ERROR: Error pairing code: Cannot read properties of null (reading 'requestPairingCode')
+[2026-05-20 12:05:55] ERROR: Error pairing code: Cannot read properties of null (reading 'requestPairingCode')
+[2026-05-20 12:06:15] ERROR: Error pairing code: Cannot read properties of null (reading 'requestPairingCode')
+[2026-05-20 12:06:35] ERROR: Error pairing code: Cannot read properties of null (reading 'requestPairingCode')
+[2026-05-20 16:05:00] ERROR: handleMessage: Table 'floreria.empresas' doesn't exist
+[2026-05-21 11:28:07] ERROR: agentService error: Cannot find module '../config/database'
+Require stack:
+- C:\kit skills\10 SKILLS ADRI Y JUANPE\kit-automatizaciones-n8n\floreria\backend\src\services\ai\agentService.js
+- C:\kit skills\10 SKILLS ADRI Y JUANPE\kit-automatizaciones-n8n\floreria\backend\src\services\whatsapp\whatsappService.js
+- C:\kit skills\10 SKILLS ADRI Y JUANPE\kit-automatizaciones-n8n\floreria\backend\server.js
+[2026-05-21 15:29:08] ERROR: enviarRecibo: Invalid login: 535 5.7.8 Error: authentication failed: (reason unavailable)
+[2026-05-24 21:34:46] ERROR: Error conectando a MySQL: 
+[2026-05-25 00:09:12] ERROR: Error conectando a MySQL: 
+[2026-05-25 13:24:55] ERROR: ajustarStock: Unknown column 'NaN' in 'field list'
+[2026-05-28 11:19:00] ERROR: updateArreglo: Unknown column 'codigo' in 'field list'
+[2026-05-28 11:19:25] ERROR: updateArreglo: Unknown column 'codigo' in 'field list'
+[2026-05-28 11:21:43] ERROR: updateArreglo: Unknown column 'codigo' in 'field list'
