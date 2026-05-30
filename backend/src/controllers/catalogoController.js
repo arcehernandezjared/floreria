@@ -279,14 +279,39 @@ async function getVentas(req, res) {
   }
 }
 
+const fs = require('fs');
+
 async function uploadImagen(req, res) {
   try {
-    if (!req.file) return res.status(400).json({ success: false, message: 'No se recibió ninguna imagen' });
+    console.log('===== UPLOAD =====');
+    console.log('FILE:', req.file);
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se recibió ninguna imagen'
+      });
+    }
+
+    console.log('PATH:', req.file.path);
+    console.log('EXISTE:', fs.existsSync(req.file.path));
+
     const url = `/uploads/${req.file.filename}`;
-    res.json({ success: true, url });
+
+    res.json({
+      success: true,
+      url
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 }
+
 
 module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, getVentas, uploadImagen };

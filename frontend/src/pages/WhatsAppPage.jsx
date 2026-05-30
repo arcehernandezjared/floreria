@@ -67,7 +67,9 @@ export default function WhatsAppPage() {
   const qc = useQueryClient();
 
   useEffect(() => {
-    const socket = io('http://localhost:3002', { transports: ['websocket', 'polling'] });
+    const socket = io('https://floreria-2-sszs.onrender.com', {
+  transports: ['websocket', 'polling']
+});
     socketRef.current = socket;
 
     socket.on('connect', () => {

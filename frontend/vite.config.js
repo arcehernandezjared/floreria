@@ -7,6 +7,6 @@ export default defineConfig({
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
   server: {
     port: 5174,
-    proxy: { '/api': { target: 'http://localhost:3002', changeOrigin: true } }
+    proxy: { '/api': { target: 'https://floreria-2-sszs.onrender.com', changeOrigin: true } }
   }
 });
