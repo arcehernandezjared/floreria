@@ -9,7 +9,12 @@ import api, { formatMoney, calcularMargen } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const BACKEND = 'http://localhost:3002';
+const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3002/api').replace('/api', '');
+const getImgUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_BASE}${url}`;
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -38,7 +43,7 @@ function MargenBar({ margen, minimo }) {
 
 function FichaModal({ arreglo, onClose, onEditar }) {
   if (!arreglo) return null;
-  const imgUrl = arreglo.imagen_url ? `${BACKEND}${arreglo.imagen_url}` : null;
+  const imgUrl = getImgUrl(arreglo.imagen_url);
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -143,7 +148,7 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
   // Imagen
   const [imagenFile,    setImagenFile]    = useState(null);   // File object
   const [imagenPreview, setImagenPreview] = useState(        // URL para preview
-    arreglo?.imagen_url ? `${BACKEND}${arreglo.imagen_url}` : null
+    getImgUrl(arreglo?.imagen_url)
   );
   const [imagenUrl,     setImagenUrl]     = useState(arreglo?.imagen_url ?? null); // URL guardada
 
@@ -669,7 +674,7 @@ export default function CatalogPage() {
           const costo  = parseFloat(a.costo_actual || a.costo_calculado || 0);
           const precio = parseFloat(a.precio_venta);
           const margen = a.margen_real !== undefined ? a.margen_real : calcularMargen(precio, costo);
-          const imgUrl = a.imagen_url ? `${BACKEND}${a.imagen_url}` : null;
+          const imgUrl = getImgUrl(a.imagen_url);
 
           return (
             <motion.div key={a.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}

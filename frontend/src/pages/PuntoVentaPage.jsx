@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, Flower2,
-  User, Tag, X, Leaf, LayoutGrid, Printer, Mail, Send, AtSign
+  User, Tag, X, Leaf, LayoutGrid, Printer, Mail, Send, AtSign, Layers
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -10,7 +10,12 @@ import api, { formatMoney } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const BACKEND = 'http://localhost:3002';
+const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3002/api').replace('/api', '');
+const getImgUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_BASE}${url}`;
+};
 
 const CANALES = [
   { value: 'mostrador', label: 'Mostrador' },
@@ -212,6 +217,11 @@ function EmailReciboInput({ defaultEmail, onEnviar, enviando }) {
 export default function PuntoVentaPage() {
   const [tab, setTab]               = useState('arreglos');
   const [busqueda, setBusqueda]     = useState('');
+  const [categoriaFiltro, setCategoriaFiltro] = useState('');   // para arreglos
+  const [categoriaVG, setCategoriaVG]         = useState('');   // para venta general
+  const [modalCategorias, setModalCategorias] = useState(false);
+  const [buscarCategoria, setBuscarCategoria] = useState('');
+  const [orden, setOrden]           = useState('nombre');
   const [carrito, setCarrito]       = useState([]);
   const [cliente, setCliente]       = useState('');
   const [emailCliente, setEmailCliente] = useState('');
@@ -359,14 +369,44 @@ export default function PuntoVentaPage() {
     setCarrito(prev => prev.map(i => i._key === key ? { ...i, precio_unitario: Number(valor) } : i));
   };
 
-  const catalogoFiltrado = catalogo.filter(a => a.activo && (!busqueda ||
-    a.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (a.codigo && a.codigo.toLowerCase() === busqueda.toLowerCase().trim())
-  ));
-  const insumosFiltrados = insumos.filter(i => !busqueda ||
-    i.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (i.codigo && i.codigo.toLowerCase() === busqueda.toLowerCase().trim())
-  );
+  const categoriasArreglos = [...new Set(
+    catalogo.filter(a => a.activo && a.categoria).map(a => a.categoria)
+  )].sort();
+
+  const TIPO_ORDER = { flor: 0, material: 1, empaque: 2, otro: 3 };
+
+  const categoriasInsumos = Object.values(
+    insumos.reduce((acc, i) => {
+      if (!i.categoria_nombre) return acc;
+      if (!acc[i.categoria_nombre]) acc[i.categoria_nombre] = { nombre: i.categoria_nombre, tipo: i.categoria_tipo };
+      return acc;
+    }, {})
+  ).sort((a, b) => {
+    const da = TIPO_ORDER[a.tipo] ?? 3, db = TIPO_ORDER[b.tipo] ?? 3;
+    return da !== db ? da - db : a.nombre.localeCompare(b.nombre, 'es');
+  });
+
+  const sortFn = (a, b) => {
+    if (orden === 'precio_asc') return parseFloat(a.precio_venta || a.costo_unitario) - parseFloat(b.precio_venta || b.costo_unitario);
+    if (orden === 'precio_desc') return parseFloat(b.precio_venta || b.costo_unitario) - parseFloat(a.precio_venta || a.costo_unitario);
+    return a.nombre.localeCompare(b.nombre, 'es');
+  };
+
+  const catalogoFiltrado = catalogo
+    .filter(a => a.activo &&
+      (!busqueda || a.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (a.codigo && a.codigo.toLowerCase() === busqueda.toLowerCase().trim())) &&
+      (!categoriaFiltro || a.categoria === categoriaFiltro)
+    )
+    .sort(sortFn);
+
+  const insumosFiltrados = insumos
+    .filter(i =>
+      tab === 'venta-general' &&
+      (busqueda || categoriaVG) &&
+      (!categoriaVG || i.categoria_nombre === categoriaVG) &&
+      (!busqueda || i.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (i.codigo && i.codigo.toLowerCase() === busqueda.toLowerCase().trim()))
+    )
+    .sort(sortFn);
 
   // Al presionar Enter: si coincide exacto por código → agregar al carrito automáticamente
   const handleBusquedaEnter = (e) => {
@@ -377,7 +417,8 @@ export default function PuntoVentaPage() {
       const match = catalogo.find(a => a.activo && a.codigo && a.codigo.toLowerCase() === term);
       if (match) { agregarArreglo(match); setBusqueda(''); toast.success(`${match.nombre} agregado`); }
     } else {
-      const match = insumos.find(i => i.codigo && i.codigo.toLowerCase() === term && parseFloat(i.stock_actual) > 0);
+      const pool = categoriaVG ? insumos.filter(i => i.categoria_nombre === categoriaVG) : insumos;
+      const match = pool.find(i => i.codigo && i.codigo.toLowerCase() === term && parseFloat(i.stock_actual) > 0);
       if (match) { agregarFlor(match); setBusqueda(''); toast.success(`${match.nombre} agregado`); }
     }
   };
@@ -394,37 +435,97 @@ export default function PuntoVentaPage() {
   return (
     <div className="flex gap-6 h-full" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
 
-      {/* ── Catálogo / Flores ── */}
+      {/* ── Panel Izquierdo ── */}
       <div className="flex-1 flex flex-col min-w-0">
+
+        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-white">Punto de Venta</h1>
             <p className="text-gray-500 text-sm">
-              {tab === 'arreglos' ? `${catalogoFiltrado.length} arreglos` : `${insumosFiltrados.length} insumos`}
+              {tab === 'arreglos' ? `${catalogoFiltrado.length} arreglos` : `${insumosFiltrados.length} productos`}
             </p>
           </div>
         </div>
 
-        <div className="flex gap-1 mb-4 bg-gray-900 p-1 rounded-xl w-fit">
-          <button onClick={() => { setTab('arreglos'); setBusqueda(''); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'arreglos' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+        {/* Tabs */}
+        <div className="flex gap-2 mb-4">
+          <button onClick={() => { setTab('arreglos'); setBusqueda(''); setCategoriaFiltro(''); }}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === 'arreglos' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
             <LayoutGrid size={15} /> Arreglos
           </button>
-          <button onClick={() => { setTab('flores'); setBusqueda(''); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'flores' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'}`}>
-            <Leaf size={15} /> Flores sueltas
+          <button onClick={() => { setTab('venta-general'); setBusqueda(''); }}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === 'venta-general' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
+            <Layers size={15} /> Venta General
           </button>
         </div>
 
-        <div className="relative mb-4">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input className="input w-full pl-9 text-sm"
-            placeholder={tab === 'arreglos' ? 'Buscar por nombre o código (Enter para agregar)' : 'Buscar flor o material...'}
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            onKeyDown={handleBusquedaEnter} />
+        {/* Barra de búsqueda + orden + botón categorías */}
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input className="input w-full pl-9 text-sm"
+              placeholder="Buscar por nombre o código (Enter para agregar)"
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              onKeyDown={handleBusquedaEnter} />
+          </div>
+          <select className="input text-xs py-2 w-32 flex-shrink-0" value={orden} onChange={e => setOrden(e.target.value)}>
+            <option value="nombre">A – Z</option>
+            <option value="precio_asc">Precio ↑</option>
+            <option value="precio_desc">Precio ↓</option>
+          </select>
+          {tab === 'venta-general' && (
+            <button onClick={() => setModalCategorias(true)}
+              className="btn-secondary flex-shrink-0 flex items-center gap-2 text-sm px-4">
+              <Layers size={15} /> Categorías
+            </button>
+          )}
         </div>
 
+        {/* Arreglos: pills de subcategoría */}
+        {tab === 'arreglos' && categoriasArreglos.length > 0 && (
+          <div className="flex gap-2 flex-wrap mb-3">
+            <button onClick={() => setCategoriaFiltro('')}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!categoriaFiltro ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+              Todos ({catalogo.filter(a => a.activo).length})
+            </button>
+            {categoriasArreglos.map(cat => {
+              const count = catalogo.filter(a => a.activo && a.categoria === cat).length;
+              return (
+                <button key={cat}
+                  onClick={() => setCategoriaFiltro(p => p === cat ? '' : cat)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${categoriaFiltro === cat ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+                  {cat} ({count})
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Venta General: chip de categoría activa */}
+        {tab === 'venta-general' && (
+          <div className="flex items-center gap-2 mb-3 min-h-[28px]">
+            {categoriaVG ? (
+              <>
+                <span className="text-xs text-gray-500">Categoría:</span>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-600/20 border border-brand-500/40 text-brand-300 text-xs font-medium">
+                  {categoriaVG}
+                  <button onClick={() => setCategoriaVG('')} className="hover:text-white transition-colors ml-0.5">
+                    <X size={11} />
+                  </button>
+                </span>
+                <span className="text-xs text-gray-600">{insumosFiltrados.length} productos</span>
+              </>
+            ) : (
+              <span className="text-xs text-gray-600">
+                {busqueda ? `${insumosFiltrados.length} resultados` : 'Selecciona una categoría o busca por nombre / código'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Grid */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center h-40">
@@ -441,7 +542,7 @@ export default function PuntoVentaPage() {
                     onClick={() => agregarArreglo(arreglo)}
                     className={`card cursor-pointer transition-all select-none ${enCarrito ? 'border-brand-500/50 bg-brand-500/5' : 'hover:border-gray-600'}`}>
                     {arreglo.imagen_url ? (
-                      <img src={`${BACKEND}${arreglo.imagen_url}`} alt={arreglo.nombre}
+                      <img src={getImgUrl(arreglo.imagen_url)} alt={arreglo.nombre}
                         className="w-full h-24 object-cover rounded-xl mb-3 border border-gray-700" />
                     ) : (
                       <div className="w-full h-24 bg-gradient-to-br from-brand-900/40 to-emerald-900/40 rounded-xl mb-3 flex items-center justify-center border border-gray-700">
@@ -472,6 +573,16 @@ export default function PuntoVentaPage() {
               {catalogoFiltrado.length === 0 && (
                 <p className="text-gray-600 text-sm col-span-3 text-center py-8">Sin arreglos disponibles</p>
               )}
+            </div>
+          ) : !categoriaVG && !busqueda ? (
+            /* Estado vacío de Venta General */
+            <div className="flex flex-col items-center justify-center h-full text-center py-16">
+              <Layers size={48} className="text-gray-700 mb-4" />
+              <p className="text-gray-400 font-medium mb-1">Selecciona una categoría</p>
+              <p className="text-gray-600 text-sm mb-6">o busca directamente por nombre o código</p>
+              <button onClick={() => setModalCategorias(true)} className="btn-primary text-sm px-6">
+                <Layers size={15} /> Ver Categorías
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
@@ -508,7 +619,7 @@ export default function PuntoVentaPage() {
                 );
               })}
               {insumosFiltrados.length === 0 && (
-                <p className="text-gray-600 text-sm col-span-3 text-center py-8">Sin insumos disponibles</p>
+                <p className="text-gray-600 text-sm col-span-3 text-center py-8">Sin productos con ese criterio</p>
               )}
             </div>
           )}
@@ -666,6 +777,81 @@ export default function PuntoVentaPage() {
           )}
         </div>
       </div>
+
+      {/* ── Modal Categorías ── */}
+      <AnimatePresence>
+        {modalCategorias && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="card w-full max-w-lg flex flex-col" style={{ maxHeight: '80vh' }}>
+
+              <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                <div>
+                  <h3 className="text-white font-bold text-lg">Categorías</h3>
+                  <p className="text-xs text-gray-500">{categoriasInsumos.length} categorías registradas</p>
+                </div>
+                <button onClick={() => { setModalCategorias(false); setBuscarCategoria(''); }}
+                  className="text-gray-500 hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="relative mb-4 flex-shrink-0">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input className="input w-full pl-9 text-sm" placeholder="Buscar categoría..."
+                  value={buscarCategoria} onChange={e => setBuscarCategoria(e.target.value)} autoFocus />
+              </div>
+
+              <div className="overflow-y-auto flex-1 space-y-5 pr-1">
+                {[
+                  { tipo: 'flor',     label: 'Flores',     color: 'text-pink-400',   cardCls: 'bg-pink-500/10 border-pink-500/25 hover:border-pink-400/60'   },
+                  { tipo: 'material', label: 'Materiales', color: 'text-yellow-400', cardCls: 'bg-yellow-500/10 border-yellow-500/25 hover:border-yellow-400/60' },
+                  { tipo: 'empaque',  label: 'Empaques',   color: 'text-purple-400', cardCls: 'bg-purple-500/10 border-purple-500/25 hover:border-purple-400/60' },
+                  { tipo: 'otro',     label: 'Otros',      color: 'text-gray-400',   cardCls: 'bg-gray-700/30 border-gray-600/30 hover:border-gray-500/60'   },
+                ].map(({ tipo, label, color, cardCls }) => {
+                  const cats = categoriasInsumos.filter(c =>
+                    c.tipo === tipo &&
+                    (!buscarCategoria || c.nombre.toLowerCase().includes(buscarCategoria.toLowerCase()))
+                  );
+                  if (!cats.length) return null;
+                  return (
+                    <div key={tipo}>
+                      <p className={`text-xs font-bold uppercase tracking-wider ${color} mb-2`}>{label}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {cats.map(cat => {
+                          const count = insumos.filter(i => i.categoria_nombre === cat.nombre).length;
+                          const activa = categoriaVG === cat.nombre;
+                          return (
+                            <button key={cat.nombre}
+                              onClick={() => { setCategoriaVG(cat.nombre); setModalCategorias(false); setBuscarCategoria(''); }}
+                              className={`flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all ${cardCls} ${activa ? 'ring-2 ring-brand-500 ring-offset-1 ring-offset-gray-900' : ''}`}>
+                              <span className={`text-sm font-medium truncate ${activa ? 'text-white' : color}`}>{cat.nombre}</span>
+                              <span className="text-xs text-gray-500 ml-2 flex-shrink-0 bg-gray-800/60 px-1.5 py-0.5 rounded-full">{count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {categoriasInsumos.filter(c => !buscarCategoria || c.nombre.toLowerCase().includes(buscarCategoria.toLowerCase())).length === 0 && (
+                  <p className="text-gray-600 text-sm text-center py-6">No se encontró esa categoría</p>
+                )}
+              </div>
+
+              {categoriaVG && (
+                <div className="pt-3 border-t border-gray-800 mt-3 flex-shrink-0">
+                  <button onClick={() => { setCategoriaVG(''); setModalCategorias(false); setBuscarCategoria(''); }}
+                    className="btn-secondary w-full text-sm">
+                    Quitar filtro · Ver todos los productos
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Modal confirmación ── */}
       <AnimatePresence>

@@ -1469,3 +1469,29 @@ Require stack:
 [2026-05-29 10:20:05] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
 [2026-05-29 10:25:05] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
 [2026-05-29 10:30:05] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 20:26:01] INFO: Conexión a MySQL establecida correctamente
+[2026-06-01 20:26:01] INFO: Floristería Alma Caribeña Backend corriendo en puerto 3002
+[2026-06-01 20:26:01] INFO: Ambiente: development
+[2026-06-01 20:26:01] INFO: Alert scheduler iniciado (intervalo: 5 min, trigger: on-connect)
+[2026-06-01 20:26:46] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 20:31:01] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 21:07:12] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 21:12:12] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 21:17:12] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 21:17:17] INFO: Conexión a MySQL establecida correctamente
+[2026-06-01 21:17:17] INFO: Floristería Alma Caribeña Backend corriendo en puerto 3002
+[2026-06-01 21:17:17] INFO: Ambiente: development
+[2026-06-01 21:17:17] INFO: Alert scheduler iniciado (intervalo: 5 min, trigger: on-connect)
+[2026-06-01 21:17:26] INFO: Conexión a MySQL establecida correctamente
+[2026-06-01 21:17:26] INFO: Floristería Alma Caribeña Backend corriendo en puerto 3002
+[2026-06-01 21:17:26] INFO: Ambiente: development
+[2026-06-01 21:17:26] INFO: Alert scheduler iniciado (intervalo: 5 min, trigger: on-connect)
+[2026-06-01 21:18:11] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 21:22:26] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 21:56:40] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 22:01:40] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 22:06:40] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 22:11:40] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 22:16:40] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 22:21:40] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
+[2026-06-01 22:26:40] INFO: Scheduler: WA no conectado, omitiendo chequeo de alertas
