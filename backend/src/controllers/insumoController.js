@@ -1,10 +1,37 @@
 const { query, queryOne } = require('../config/database');
 const logger = require('../utils/logger');
+const { v2: cloudinary } = require('cloudinary');
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 async function ensureCodigoInsumos() {
   try {
     await query('ALTER TABLE insumos ADD COLUMN codigo VARCHAR(50) NULL DEFAULT NULL');
   } catch (_) {}
+  try {
+    await query('ALTER TABLE insumos ADD COLUMN imagen_url VARCHAR(500) NULL DEFAULT NULL');
+  } catch (_) {}
+}
+
+async function uploadImagenInsumo(req, res) {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No se recibió ninguna imagen' });
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'floreria-insumos', resource_type: 'image' },
+        (error, result) => error ? reject(error) : resolve(result)
+      );
+      stream.end(req.file.buffer);
+    });
+    res.json({ success: true, url: result.secure_url });
+  } catch (error) {
+    logger.error(`uploadImagenInsumo: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
 }
 
 async function getInsumos(req, res) {
@@ -51,11 +78,12 @@ async function createInsumo(req, res) {
       return res.status(400).json({ success: false, message: 'Nombre y categoría son requeridos' });
     }
 
+    const { imagen_url } = req.body;
     const result = await query(
-      `INSERT INTO insumos (nombre, categoria_id, proveedor_id, unidad, stock_actual, stock_minimo, costo_unitario, vida_util_dias, codigo)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO insumos (nombre, categoria_id, proveedor_id, unidad, stock_actual, stock_minimo, costo_unitario, vida_util_dias, codigo, imagen_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [nombre, categoria_id, proveedor_id || null, unidad || 'unidad',
-       stock_actual || 0, stock_minimo || 10, costo_unitario || 0, vida_util_dias || null, codigo || null]
+       stock_actual || 0, stock_minimo || 10, costo_unitario || 0, vida_util_dias || null, codigo || null, imagen_url || null]
     );
 
     const insumo = await queryOne(
@@ -75,7 +103,7 @@ async function createInsumo(req, res) {
 async function updateInsumo(req, res) {
   try {
     const { id } = req.params;
-    const { nombre, categoria_id, proveedor_id, unidad, stock_minimo, costo_unitario, vida_util_dias, codigo } = req.body;
+    const { nombre, categoria_id, proveedor_id, unidad, stock_minimo, costo_unitario, vida_util_dias, codigo, imagen_url } = req.body;
 
     const existing = await queryOne('SELECT * FROM insumos WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ success: false, message: 'Insumo no encontrado' });
@@ -88,13 +116,14 @@ async function updateInsumo(req, res) {
     }
 
     await query(
-      `UPDATE insumos SET nombre=?, categoria_id=?, proveedor_id=?, unidad=?, stock_minimo=?, costo_unitario=?, vida_util_dias=?, codigo=?
+      `UPDATE insumos SET nombre=?, categoria_id=?, proveedor_id=?, unidad=?, stock_minimo=?, costo_unitario=?, vida_util_dias=?, codigo=?, imagen_url=?
        WHERE id=?`,
       [nombre || existing.nombre, categoria_id || existing.categoria_id,
        proveedor_id || existing.proveedor_id, unidad || existing.unidad,
        stock_minimo ?? existing.stock_minimo, costo_unitario ?? existing.costo_unitario,
        vida_util_dias ?? existing.vida_util_dias,
-       codigo !== undefined ? (codigo || null) : existing.codigo, id]
+       codigo !== undefined ? (codigo || null) : existing.codigo,
+       imagen_url !== undefined ? (imagen_url || null) : existing.imagen_url, id]
     );
 
     const updated = await queryOne(
@@ -274,7 +303,7 @@ async function deleteCategoria(req, res) {
 }
 
 module.exports = {
-  ensureCodigoInsumos,
+  ensureCodigoInsumos, uploadImagenInsumo,
   getInsumos, getCategorias, createInsumo, updateInsumo, deleteInsumo,
   getStockBajo, ajustarStock, getHistorialCostos, ventaDirecta,
   createCategoria, updateCategoria, deleteCategoria

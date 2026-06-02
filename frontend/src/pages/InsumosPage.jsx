@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Edit, Trash2, Tag, X, Check } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Tag, X, Check, Camera, ImagePlus } from 'lucide-react';
 import api, { formatMoney } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3002/api').replace('/api', '');
+const getImgUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${BACKEND_BASE}${url}`;
+};
 
 const MOTIVOS_UNIDAD = ['tallo', 'unidad', 'bloque', 'metro'];
 
@@ -231,16 +238,91 @@ function InsumoModal({ insumo, categorias, proveedores, onClose, onSave }) {
     stock_actual: 0, stock_minimo: 10, costo_unitario: 0, vida_util_dias: '', codigo: ''
   });
 
+  const [imagenPreview, setImagenPreview] = useState(getImgUrl(insumo?.imagen_url));
+  const [imagenUrl, setImagenUrl]         = useState(insumo?.imagen_url || null);
+  const [subiendoImg, setSubiendoImg]     = useState(false);
+  const fileRef   = useRef(null);
+  const camaraRef = useRef(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImagenPreview(URL.createObjectURL(file));
+    setSubiendoImg(true);
+    try {
+      const fd = new FormData();
+      fd.append('imagen', file);
+      const res = await api.post('/insumos/upload-imagen', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setImagenUrl(res.data.url);
+    } catch {
+      toast.error('Error al subir la imagen');
+      setImagenPreview(getImgUrl(insumo?.imagen_url));
+      setImagenUrl(insumo?.imagen_url || null);
+    } finally {
+      setSubiendoImg(false);
+    }
+  };
+
+  const quitarImagen = () => {
+    setImagenPreview(null);
+    setImagenUrl(null);
+    if (fileRef.current) fileRef.current.value = '';
+    if (camaraRef.current) camaraRef.current.value = '';
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(form);
+    onSave({ ...form, imagen_url: imagenUrl });
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="card w-full max-w-lg">
-        <h3 className="text-lg font-semibold text-white mb-4">{insumo ? 'Editar Insumo' : 'Nuevo Insumo'}</h3>
+    <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 p-4 overflow-y-auto">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="card w-full max-w-lg my-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">{insumo ? 'Editar Insumo' : 'Nuevo Insumo'}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-3">
+
+          {/* ── Imagen ── */}
+          <div>
+            <label className="label mb-2 block">Foto del insumo</label>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFile} />
+            <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+
+            {imagenPreview ? (
+              <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-700 group">
+                <img src={imagenPreview} alt="preview" className="w-full h-full object-cover" />
+                {subiendoImg && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                  <button type="button" onClick={() => fileRef.current?.click()}
+                    className="btn-secondary text-xs py-1.5 px-3"><ImagePlus size={13} /> Archivo</button>
+                  <button type="button" onClick={() => camaraRef.current?.click()}
+                    className="btn-secondary text-xs py-1.5 px-3"><Camera size={13} /> Cámara</button>
+                  <button type="button" onClick={quitarImagen}
+                    className="btn-danger text-xs py-1.5 px-3"><X size={13} /> Quitar</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  className="flex-1 h-28 border-2 border-dashed border-gray-700 hover:border-brand-500 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-colors group">
+                  <ImagePlus size={22} className="text-gray-600 group-hover:text-brand-400 transition-colors" />
+                  <span className="text-xs text-gray-600 group-hover:text-gray-400">Desde archivo</span>
+                </button>
+                <button type="button" onClick={() => camaraRef.current?.click()}
+                  className="flex-1 h-28 border-2 border-dashed border-gray-700 hover:border-emerald-500 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-colors group">
+                  <Camera size={22} className="text-gray-600 group-hover:text-emerald-400 transition-colors" />
+                  <span className="text-xs text-gray-600 group-hover:text-gray-400">Desde cámara</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Nombre *</label>
@@ -295,7 +377,9 @@ function InsumoModal({ insumo, categorias, proveedores, onClose, onSave }) {
             </select>
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="submit" className="btn-primary flex-1 justify-center">Guardar</button>
+            <button type="submit" disabled={subiendoImg} className="btn-primary flex-1 justify-center disabled:opacity-50">
+              {subiendoImg ? 'Subiendo imagen...' : 'Guardar'}
+            </button>
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
           </div>
         </form>
@@ -435,10 +519,23 @@ export default function InsumosPage() {
                 return (
                   <tr key={i.id} className="table-row">
                     <td className="td">
-                      <p className="text-white font-medium">{i.nombre}</p>
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-gray-500">{i.unidad}</p>
-                        {i.codigo && <span className="text-xs text-brand-500 font-mono">{i.codigo}</span>}
+                      <div className="flex items-center gap-3">
+                        {getImgUrl(i.imagen_url) ? (
+                          <img src={getImgUrl(i.imagen_url)} alt={i.nombre}
+                            className="w-10 h-10 rounded-lg object-cover border border-gray-700 flex-shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center flex-shrink-0"
+                            style={{ color: i.categoria_color || '#6b7280' }}>
+                            <span className="text-lg">🌿</span>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-white font-medium">{i.nombre}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-gray-500">{i.unidad}</p>
+                            {i.codigo && <span className="text-xs text-brand-500 font-mono">{i.codigo}</span>}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="td">
