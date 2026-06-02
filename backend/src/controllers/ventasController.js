@@ -1,41 +1,7 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const logger = require('../utils/logger');
-const fs = require('fs');
-const path = require('path');
 
-function getTransporter() {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return null;
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    requireTLS: port !== 465,
-    auth: { user, pass },
-    family: 4,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-  });
-}
-
-function getLogoPath() {
-  const candidates = [
-    '../../uploads/almacaribe.png',
-    '../../uploads/logo.png',
-    '../../uploads/logo.jpg',
-  ];
-  for (const rel of candidates) {
-    try {
-      const p = path.join(__dirname, rel);
-      if (fs.existsSync(p)) return p;
-    } catch (_) {}
-  }
-  return null;
-}
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function buildReciboHTML({ cliente_nombre, items, subtotal, descuento_pct, total, numero, fecha, canal, hasLogo }) {
   const descuento = parseFloat(descuento_pct || 0);
@@ -143,20 +109,16 @@ async function enviarRecibo(req, res) {
     const { email, cliente_nombre, items, subtotal, descuento_pct, total, numero, fecha, canal } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'Email requerido' });
 
-    const transporter = getTransporter();
-    if (!transporter) {
-      return res.status(400).json({ success: false, message: 'SMTP no configurado. Agregá SMTP_HOST, SMTP_USER y SMTP_PASS en el .env' });
-    }
+    const from = process.env.EMAIL_FROM || 'Floristería Alma Caribeña <onboarding@resend.dev>';
 
-    const from = process.env.SMTP_FROM || `Floristería Alma Caribeña <${process.env.SMTP_USER}>`;
-    const logoPath = getLogoPath();
-    await transporter.sendMail({
+    const { error } = await resend.emails.send({
       from,
-      to: email,
+      to: [email],
       subject: `Recibo ${numero} · Floristería Alma Caribeña`,
-      html: buildReciboHTML({ cliente_nombre, items, subtotal, descuento_pct, total, numero, fecha, canal, hasLogo: !!logoPath }),
-      attachments: logoPath ? [{ filename: 'logo.png', path: logoPath, cid: 'logo@alma' }] : [],
+      html: buildReciboHTML({ cliente_nombre, items, subtotal, descuento_pct, total, numero, fecha, canal, hasLogo: false }),
     });
+
+    if (error) throw new Error(error.message);
 
     logger.info(`Recibo ${numero} enviado a ${email}`);
     res.json({ success: true, message: `Recibo enviado a ${email}` });

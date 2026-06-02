@@ -1,23 +1,8 @@
 const { query, queryOne } = require('../config/database');
 const logger = require('../utils/logger');
-const nodemailer = require('nodemailer');
-const fs = require('fs');
-const path = require('path');
+const { Resend } = require('resend');
 
-function getLogoPath() {
-  const candidates = [
-    '../../uploads/almacaribe.png',
-    '../../uploads/logo.png',
-    '../../uploads/logo.jpg',
-  ];
-  for (const rel of candidates) {
-    try {
-      const p = path.join(__dirname, rel);
-      if (fs.existsSync(p)) return p;
-    } catch (_) {}
-  }
-  return null;
-}
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ── Número correlativo ────────────────────────────────────────────────────────
 async function generarNumero() {
@@ -125,25 +110,6 @@ async function deleteCotizacion(req, res) {
 }
 
 // ── Email ─────────────────────────────────────────────────────────────────────
-function getTransporter() {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return null;
-
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    requireTLS: port !== 465,
-    auth: { user, pass },
-    family: 4,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-  });
-}
 
 function buildEmailHTML(cot, hasLogo = false) {
   const items = Array.isArray(cot.items) ? cot.items : JSON.parse(cot.items || '[]');
@@ -273,24 +239,19 @@ async function enviarCotizacion(req, res) {
     if (!cot) return res.status(404).json({ success: false, message: 'Cotización no encontrada' });
     if (!cot.cliente_email) return res.status(400).json({ success: false, message: 'La cotización no tiene email del cliente' });
 
-    const transporter = getTransporter();
-    if (!transporter) {
-      return res.status(400).json({ success: false, message: 'SMTP no configurado. Agregá SMTP_HOST, SMTP_USER y SMTP_PASS en el .env' });
-    }
-
     if (cot.items && typeof cot.items === 'string') cot.items = JSON.parse(cot.items);
 
-    const from = process.env.SMTP_FROM || `Floristería Alma Caribeña <${process.env.SMTP_USER}>`;
+    const from = process.env.EMAIL_FROM || 'Floristería Alma Caribeña <onboarding@resend.dev>';
     const asunto = `Cotización ${cot.numero}${cot.tipo_evento ? ` — ${cot.tipo_evento}` : ''} · Floristería Alma Caribeña`;
-    const logoPath = getLogoPath();
 
-    await transporter.sendMail({
+    const { error } = await resend.emails.send({
       from,
-      to: cot.cliente_email,
+      to: [cot.cliente_email],
       subject: asunto,
-      html: buildEmailHTML(cot, !!logoPath),
-      attachments: logoPath ? [{ filename: 'logo.png', path: logoPath, cid: 'logo@alma' }] : [],
+      html: buildEmailHTML(cot, false),
     });
+
+    if (error) throw new Error(error.message);
 
     await query("UPDATE cotizaciones SET estado = 'enviada' WHERE id = ?", [cot.id]);
 
