@@ -15,6 +15,9 @@ async function ensureCodigoInsumos() {
   try {
     await query('ALTER TABLE insumos ADD COLUMN imagen_url VARCHAR(500) NULL DEFAULT NULL');
   } catch (_) {}
+  try {
+    await query('ALTER TABLE insumos ADD COLUMN precio_venta DECIMAL(10,2) NULL DEFAULT NULL');
+  } catch (_) {}
 }
 
 async function uploadImagenInsumo(req, res) {
@@ -78,12 +81,12 @@ async function createInsumo(req, res) {
       return res.status(400).json({ success: false, message: 'Nombre y categoría son requeridos' });
     }
 
-    const { imagen_url } = req.body;
+    const { imagen_url, precio_venta } = req.body;
     const result = await query(
-      `INSERT INTO insumos (nombre, categoria_id, proveedor_id, unidad, stock_actual, stock_minimo, costo_unitario, vida_util_dias, codigo, imagen_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO insumos (nombre, categoria_id, proveedor_id, unidad, stock_actual, stock_minimo, costo_unitario, vida_util_dias, codigo, imagen_url, precio_venta)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [nombre, categoria_id, proveedor_id || null, unidad || 'unidad',
-       stock_actual || 0, stock_minimo || 10, costo_unitario || 0, vida_util_dias || null, codigo || null, imagen_url || null]
+       stock_actual || 0, stock_minimo || 10, costo_unitario || 0, vida_util_dias || null, codigo || null, imagen_url || null, precio_venta || null]
     );
 
     const insumo = await queryOne(
@@ -103,7 +106,7 @@ async function createInsumo(req, res) {
 async function updateInsumo(req, res) {
   try {
     const { id } = req.params;
-    const { nombre, categoria_id, proveedor_id, unidad, stock_minimo, costo_unitario, vida_util_dias, codigo, imagen_url } = req.body;
+    const { nombre, categoria_id, proveedor_id, unidad, stock_minimo, costo_unitario, vida_util_dias, codigo, imagen_url, precio_venta } = req.body;
 
     const existing = await queryOne('SELECT * FROM insumos WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ success: false, message: 'Insumo no encontrado' });
@@ -116,14 +119,15 @@ async function updateInsumo(req, res) {
     }
 
     await query(
-      `UPDATE insumos SET nombre=?, categoria_id=?, proveedor_id=?, unidad=?, stock_minimo=?, costo_unitario=?, vida_util_dias=?, codigo=?, imagen_url=?
+      `UPDATE insumos SET nombre=?, categoria_id=?, proveedor_id=?, unidad=?, stock_minimo=?, costo_unitario=?, vida_util_dias=?, codigo=?, imagen_url=?, precio_venta=?
        WHERE id=?`,
       [nombre || existing.nombre, categoria_id || existing.categoria_id,
        proveedor_id || existing.proveedor_id, unidad || existing.unidad,
        stock_minimo ?? existing.stock_minimo, costo_unitario ?? existing.costo_unitario,
        vida_util_dias ?? existing.vida_util_dias,
        codigo !== undefined ? (codigo || null) : existing.codigo,
-       imagen_url !== undefined ? (imagen_url || null) : existing.imagen_url, id]
+       imagen_url !== undefined ? (imagen_url || null) : existing.imagen_url,
+       precio_venta !== undefined ? (precio_venta || null) : existing.precio_venta, id]
     );
 
     const updated = await queryOne(
