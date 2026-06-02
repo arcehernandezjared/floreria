@@ -131,11 +131,17 @@ function getTransporter() {
   const pass = process.env.SMTP_PASS;
   if (!host || !user || !pass) return null;
 
+  const port = parseInt(process.env.SMTP_PORT || '587');
   return nodemailer.createTransport({
     host,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
+    port,
+    secure: port === 465,
+    requireTLS: port !== 465,
     auth: { user, pass },
+    family: 4,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 }
 
