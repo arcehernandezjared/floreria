@@ -258,11 +258,11 @@ async function ventaDirecta(req, res) {
 
 async function createCategoria(req, res) {
   try {
-    const { nombre, color } = req.body;
+    const { nombre, color, tipo } = req.body;
     if (!nombre) return res.status(400).json({ success: false, message: 'El nombre es requerido' });
     const result = await query(
       'INSERT INTO categorias_insumo (nombre, tipo, color) VALUES (?, ?, ?)',
-      [nombre, 'otro', color || '#10b981']
+      [nombre, tipo || 'otro', color || '#10b981']
     );
     const cat = await queryOne('SELECT * FROM categorias_insumo WHERE id = ?', [result.insertId]);
     res.status(201).json({ success: true, data: cat });
@@ -275,11 +275,11 @@ async function createCategoria(req, res) {
 async function updateCategoria(req, res) {
   try {
     const { id } = req.params;
-    const { nombre, color } = req.body;
+    const { nombre, color, tipo } = req.body;
     if (!nombre) return res.status(400).json({ success: false, message: 'El nombre es requerido' });
     const existing = await queryOne('SELECT * FROM categorias_insumo WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ success: false, message: 'Categoría no encontrada' });
-    await query('UPDATE categorias_insumo SET nombre=?, color=? WHERE id=?', [nombre, color || existing.color, id]);
+    await query('UPDATE categorias_insumo SET nombre=?, color=?, tipo=? WHERE id=?', [nombre, color || existing.color, tipo || existing.tipo, id]);
     const cat = await queryOne('SELECT * FROM categorias_insumo WHERE id = ?', [id]);
     res.json({ success: true, data: cat });
   } catch (error) {

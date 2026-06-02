@@ -30,7 +30,7 @@ function CategoriasModal({ onClose }) {
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ nombre: '', color: '#10b981' });
+  const [newForm, setNewForm] = useState({ nombre: '', color: '#10b981', tipo: 'flor' });
 
   const { data: categorias = [] } = useQuery({
     queryKey: ['categorias'],
@@ -122,12 +122,14 @@ function CategoriasModal({ onClose }) {
                       onChange={e => setEditForm(p => ({ ...p, color: e.target.value }))}
                       className="w-8 h-8 rounded-lg cursor-pointer border border-gray-700 bg-gray-900 p-0.5"
                     />
-                    <div
-                      className="px-2.5 py-1 rounded-full text-xs font-medium border"
-                      style={{ background: `${editForm.color || '#6b7280'}20`, color: editForm.color || '#6b7280', borderColor: `${editForm.color || '#6b7280'}40` }}
-                    >
-                      {editForm.nombre}
-                    </div>
+                    <select className="input text-xs flex-1"
+                      value={editForm.tipo || 'otro'}
+                      onChange={e => setEditForm(p => ({ ...p, tipo: e.target.value }))}>
+                      <option value="flor">🌸 Flor</option>
+                      <option value="material">🪢 Material</option>
+                      <option value="empaque">📦 Empaque</option>
+                      <option value="otro">📌 Otro</option>
+                    </select>
                     <div className="flex gap-2 ml-auto">
                       <button type="submit" disabled={updateMut.isPending} className="btn-primary text-xs px-3 py-1.5">
                         {updateMut.isPending ? 'Guardando...' : 'Guardar'}
@@ -193,6 +195,17 @@ function CategoriasModal({ onClose }) {
                   autoFocus
                   required
                 />
+              </div>
+              <div>
+                <label className="label">Tipo</label>
+                <select className="input"
+                  value={newForm.tipo}
+                  onChange={e => setNewForm(p => ({ ...p, tipo: e.target.value }))}>
+                  <option value="flor">🌸 Flor</option>
+                  <option value="material">🪢 Material</option>
+                  <option value="empaque">📦 Empaque</option>
+                  <option value="otro">📌 Otro</option>
+                </select>
               </div>
               <div className="flex items-center gap-3">
                 <label className="label mb-0 whitespace-nowrap">Color de etiqueta:</label>
