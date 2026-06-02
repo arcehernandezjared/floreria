@@ -1,11 +1,17 @@
 const { query, queryOne } = require('../config/database');
 const logger = require('../utils/logger');
 
+async function ensureMetaColumns() {
+  try { await query('ALTER TABLE config_nomina ADD COLUMN gastos_meta DECIMAL(12,2) DEFAULT 0'); } catch (_) {}
+  try { await query('ALTER TABLE config_nomina ADD COLUMN dias_laborales INT DEFAULT 26'); } catch (_) {}
+}
+
 async function getConfig(req, res) {
   try {
+    await ensureMetaColumns();
     let config = await queryOne('SELECT * FROM config_nomina LIMIT 1');
     if (!config) {
-      await query('INSERT INTO config_nomina (porcentaje_provision, meta_quincena, periodo_dias) VALUES (15, 600000, 15)');
+      await query('INSERT INTO config_nomina (porcentaje_provision, meta_quincena, periodo_dias, gastos_meta, dias_laborales) VALUES (15, 600000, 15, 0, 26)');
       config = await queryOne('SELECT * FROM config_nomina LIMIT 1');
     }
     res.json({ success: true, data: config });
@@ -16,24 +22,26 @@ async function getConfig(req, res) {
 
 async function updateConfig(req, res) {
   try {
-    const { porcentaje_provision, meta_quincena, periodo_dias, numero_alertas } = req.body;
+    const { porcentaje_provision, meta_quincena, periodo_dias, numero_alertas, gastos_meta, dias_laborales } = req.body;
     const config = await queryOne('SELECT * FROM config_nomina LIMIT 1');
 
     if (config) {
       await query(
-        'UPDATE config_nomina SET porcentaje_provision=?, meta_quincena=?, periodo_dias=?, numero_alertas=? WHERE id=?',
+        'UPDATE config_nomina SET porcentaje_provision=?, meta_quincena=?, periodo_dias=?, numero_alertas=?, gastos_meta=?, dias_laborales=? WHERE id=?',
         [
           porcentaje_provision ?? config.porcentaje_provision,
           meta_quincena       ?? config.meta_quincena,
           periodo_dias        ?? config.periodo_dias,
           numero_alertas !== undefined ? (numero_alertas || null) : (config.numero_alertas ?? null),
+          gastos_meta  !== undefined ? gastos_meta  : (config.gastos_meta ?? 0),
+          dias_laborales !== undefined ? dias_laborales : (config.dias_laborales ?? 26),
           config.id
         ]
       );
     } else {
       await query(
-        'INSERT INTO config_nomina (porcentaje_provision, meta_quincena, periodo_dias, numero_alertas) VALUES (?, ?, ?, ?)',
-        [porcentaje_provision || 15, meta_quincena || 600000, periodo_dias || 15, numero_alertas || null]
+        'INSERT INTO config_nomina (porcentaje_provision, meta_quincena, periodo_dias, numero_alertas, gastos_meta, dias_laborales) VALUES (?, ?, ?, ?, ?, ?)',
+        [porcentaje_provision || 15, meta_quincena || 600000, periodo_dias || 15, numero_alertas || null, gastos_meta || 0, dias_laborales || 26]
       );
     }
 
@@ -310,4 +318,43 @@ async function registrarProvisionNomina(fecha, ingresos_dia) {
   return { provision, acumulado, periodoInicio };
 }
 
-module.exports = { getConfig, updateConfig, cierreDia, getTermometro, resetPeriodo, getHistorialPeriodo, getCalculoSalarios, getIngresosHoy, testAlerta, forzarAlerta, registrarProvisionNomina };
+async function getResumenMes(req, res) {
+  try {
+    const hoy = new Date();
+    const primerDia = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`;
+    const hoyStr = hoy.toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+
+    const [ventas, gastos] = await Promise.all([
+      queryOne(
+        `SELECT COALESCE(SUM(precio_venta), 0) as total, COUNT(*) as count
+         FROM ventas_floreria
+         WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) BETWEEN ? AND ?`,
+        [primerDia, hoyStr]
+      ),
+      queryOne(
+        `SELECT COALESCE(SUM(monto), 0) as total FROM gastos WHERE DATE(fecha) BETWEEN ? AND ?`,
+        [primerDia, hoyStr]
+      ),
+    ]);
+
+    const diasTranscurridos = hoy.getDate();
+    const diasEnMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+
+    res.json({
+      success: true,
+      data: {
+        ventas_mes: parseFloat(ventas.total),
+        ventas_count: ventas.count,
+        gastos_mes: parseFloat(gastos.total),
+        dias_transcurridos: diasTranscurridos,
+        dias_en_mes: diasEnMes,
+        promedio_diario: diasTranscurridos > 0 ? parseFloat(ventas.total) / diasTranscurridos : 0,
+      }
+    });
+  } catch (error) {
+    logger.error(`getResumenMes: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+module.exports = { getConfig, updateConfig, cierreDia, getTermometro, resetPeriodo, getHistorialPeriodo, getCalculoSalarios, getIngresosHoy, testAlerta, forzarAlerta, registrarProvisionNomina, getResumenMes };

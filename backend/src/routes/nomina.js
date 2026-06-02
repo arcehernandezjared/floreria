@@ -14,5 +14,6 @@ router.post('/cierre-dia',       ctrl.cierreDia);
 router.post('/reset-periodo',    ctrl.resetPeriodo);
 router.post('/test-alerta',      ctrl.testAlerta);
 router.post('/forzar-alerta',    ctrl.forzarAlerta);
+router.get('/resumen-mes',       ctrl.getResumenMes);
 
 module.exports = router;
