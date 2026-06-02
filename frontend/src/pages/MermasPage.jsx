@@ -24,7 +24,7 @@ export default function MermasPage() {
   const [form, setForm] = useState({ insumo_id: '', cantidad: '', motivo: 'marchita_tienda', proveedor_id: '', notas: '' });
   const [filtroFecha, setFiltroFecha] = useState(new Date().toISOString().split('T')[0]);
 
-  const { data: insumos = [] } = useQuery({ queryKey: ['insumos-activos'], queryFn: () => api.get('/insumos').then(r => r.data.data) });
+  const { data: insumos = [] } = useQuery({ queryKey: ['insumos-activos'], queryFn: () => api.get('/insumos', { params: { tipo: 'flor' } }).then(r => r.data.data) });
   const { data: proveedores = [] } = useQuery({ queryKey: ['proveedores'], queryFn: () => api.get('/proveedores').then(r => r.data.data) });
 
   const { data: mermas = [] } = useQuery({
