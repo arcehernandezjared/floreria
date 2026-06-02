@@ -423,12 +423,12 @@ export default function InsumosPage() {
   const [ajusteTarget, setAjusteTarget] = useState(null);
   const [showCategorias, setShowCategorias] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
-  const [busqueda, setBusqueda] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('');
+  const [busqueda, setBusqueda]           = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('');
 
   const { data: insumos = [] } = useQuery({
-    queryKey: ['insumos', busqueda, filtroTipo],
-    queryFn: () => api.get('/insumos', { params: { busqueda: busqueda || undefined, tipo: filtroTipo || undefined } }).then(r => r.data.data)
+    queryKey: ['insumos', busqueda, filtroCategoria],
+    queryFn: () => api.get('/insumos', { params: { busqueda: busqueda || undefined, categoria_id: filtroCategoria || undefined } }).then(r => r.data.data)
   });
 
   const { data: categorias = [] } = useQuery({ queryKey: ['categorias'], queryFn: () => api.get('/insumos/categorias').then(r => r.data.data) });
@@ -483,19 +483,37 @@ export default function InsumosPage() {
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input className="input pl-9" placeholder="Buscar insumo..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-        </div>
-        <select className="input w-40" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
-          <option value="">Todos los tipos</option>
-          <option value="flor">Flores</option>
-          <option value="material">Materiales</option>
-          <option value="empaque">Empaque</option>
-        </select>
+      {/* Búsqueda */}
+      <div className="relative max-w-sm">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        <input className="input pl-9" placeholder="Buscar insumo..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
       </div>
+
+      {/* Pills de categoría */}
+      {categorias.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setFiltroCategoria('')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${!filtroCategoria ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+            Todos ({insumos.length})
+          </button>
+          {categorias.map(cat => {
+            const count = insumos.filter(i => String(i.categoria_id) === String(cat.id) || i.categoria_nombre === cat.nombre).length;
+            const activa = String(filtroCategoria) === String(cat.id);
+            return (
+              <button key={cat.id}
+                onClick={() => setFiltroCategoria(p => String(p) === String(cat.id) ? '' : String(cat.id))}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${activa ? 'text-white' : 'text-gray-400 hover:border-gray-500'}`}
+                style={activa
+                  ? { backgroundColor: cat.color, borderColor: cat.color }
+                  : { borderColor: `${cat.color}40`, color: cat.color }
+                }>
+                {cat.nombre} {!filtroCategoria && `(${count})`}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Tabla */}
       <div className="card p-0 overflow-hidden">
