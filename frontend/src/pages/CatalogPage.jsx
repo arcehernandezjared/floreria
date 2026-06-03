@@ -13,8 +13,9 @@ const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3002/api
 const getImgUrl = (url) => {
   if (!url) return null;
   if (url.startsWith('http')) return url;
+  return `${BACKEND_BASE}${url}`;
+};
 
-// Input de cantidad con estado local para permitir borrar y escribir libremente
 function CantidadInput({ value, onChange, className }) {
   const [local, setLocal] = useState(String(value));
 
@@ -29,13 +30,11 @@ function CantidadInput({ value, onChange, className }) {
       onBlur={() => {
         const v = Math.round(Number(local));
         if (v > 0) { onChange(v); setLocal(String(v)); }
-        else { setLocal(String(value)); } // revierte si queda vacío o 0
+        else { setLocal(String(value)); }
       }}
     />
   );
 }
-  return `${BACKEND_BASE}${url}`;
-};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
