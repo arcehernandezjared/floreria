@@ -114,58 +114,58 @@ export default function Layout() {
     <div className="flex h-screen bg-gray-950 overflow-hidden">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside className={`flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-200 ${sidebarOpen ? 'w-64 overflow-hidden' : 'w-0 overflow-hidden'}`}>
-        <div className={sidebarOpen ? 'flex flex-col h-full min-w-[256px]' : 'hidden'}>
-            {/* Logo */}
-            <div className="p-6 border-b border-gray-800">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-gradient-to-br from-brand-500 to-brand-700 rounded-xl flex items-center justify-center">
-                  <Flower2 size={18} className="text-white" />
-                </div>
-                <div>
-                  <h1 className="font-bold text-white text-base leading-none">Alma Caribeña</h1>
-                  <p className="text-xs text-gray-500 mt-0.5">Floristería</p>
-                </div>
+      {sidebarOpen && (
+        <aside className="w-64 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden">
+          {/* Logo */}
+          <div className="p-6 border-b border-gray-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-brand-500 to-brand-700 rounded-xl flex items-center justify-center">
+                <Flower2 size={18} className="text-white" />
+              </div>
+              <div>
+                <h1 className="font-bold text-white text-base leading-none">Alma Caribeña</h1>
+                <p className="text-xs text-gray-500 mt-0.5">Floristería</p>
               </div>
             </div>
+          </div>
 
-            {/* Nav */}
-            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              {NAV_ITEMS.map(({ path, icon: Icon, label, highlight }) => (
-                <NavLink key={path} to={path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
-                      isActive
-                        ? 'bg-brand-600/20 text-brand-400 border border-brand-600/30'
-                        : highlight
-                        ? 'text-white bg-brand-600/10 border border-brand-600/20 hover:bg-brand-600/20'
-                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                    }`
-                  }
-                >
-                  <Icon size={18} />
-                  {label}
-                </NavLink>
-              ))}
-            </nav>
+          {/* Nav */}
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+            {NAV_ITEMS.map(({ path, icon: Icon, label, highlight }) => (
+              <NavLink key={path} to={path}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                    isActive
+                      ? 'bg-brand-600/20 text-brand-400 border border-brand-600/30'
+                      : highlight
+                      ? 'text-white bg-brand-600/10 border border-brand-600/20 hover:bg-brand-600/20'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`
+                }
+              >
+                <Icon size={18} />
+                {label}
+              </NavLink>
+            ))}
+          </nav>
 
-            {/* User */}
-            <div className="p-4 border-t border-gray-800">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-emerald-600 flex items-center justify-center text-xs font-bold text-white">
-                  {user?.nombre?.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{user?.nombre}</p>
-                  <p className="text-xs text-gray-500 capitalize">{user?.rol}</p>
-                </div>
+          {/* User */}
+          <div className="p-4 border-t border-gray-800">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-emerald-600 flex items-center justify-center text-xs font-bold text-white">
+                {user?.nombre?.charAt(0).toUpperCase()}
               </div>
-              <button onClick={handleLogout} className="w-full btn-secondary text-sm justify-center">
-                <LogOut size={15} /> Cerrar sesión
-              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{user?.nombre}</p>
+                <p className="text-xs text-gray-500 capitalize">{user?.rol}</p>
+              </div>
             </div>
-        </div>
-      </aside>
+            <button onClick={handleLogout} className="w-full btn-secondary text-sm justify-center">
+              <LogOut size={15} /> Cerrar sesión
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
