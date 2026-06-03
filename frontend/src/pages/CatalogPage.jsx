@@ -16,29 +16,21 @@ const getImgUrl = (url) => {
   return `${BACKEND_BASE}${url}`;
 };
 
-function CantidadInput({ value, onChange, className }) {
-  const [local, setLocal] = useState(String(value));
-
-  useEffect(() => { setLocal(String(value)); }, [value]);
-
+function CantidadInput({ value, onChange }) {
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      pattern="[0-9]*"
-      className={className}
-      value={local}
-      onFocus={e => {
-        const el = e.target;
-        setTimeout(() => el.setSelectionRange(0, el.value.length), 0);
-      }}
-      onChange={e => setLocal(e.target.value.replace(/[^0-9]/g, ''))}
-      onBlur={() => {
-        const v = parseInt(local, 10);
-        if (v > 0) { onChange(v); setLocal(String(v)); }
-        else { setLocal(String(value)); }
-      }}
-    />
+    <div className="flex items-center gap-1.5 justify-center">
+      <button type="button"
+        onClick={() => { if (value > 1) onChange(value - 1); }}
+        className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white font-bold text-base leading-none select-none">
+        −
+      </button>
+      <span className="text-white font-bold text-sm w-8 text-center tabular-nums">{value}</span>
+      <button type="button"
+        onClick={() => onChange(value + 1)}
+        className="w-7 h-7 rounded-lg bg-brand-600 hover:bg-brand-500 flex items-center justify-center text-white font-bold text-base leading-none select-none">
+        +
+      </button>
+    </div>
   );
 }
 
@@ -459,7 +451,6 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
                         <td className="td">
                           <CantidadInput
                             value={ing.cantidad}
-                            className="input w-20 text-sm text-center mx-auto block py-1"
                             onChange={v => cambiarCantidad(ing.insumo_id, v)}
                           />
                         </td>
