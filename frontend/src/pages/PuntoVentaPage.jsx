@@ -301,8 +301,13 @@ function ArregloPersonalizadoModal({ insumos, onClose, onVender, isPending }) {
                   )}
                 </AnimatePresence>
               </div>
-              <input type="number" min="1" step="1" className="input w-20 text-center text-sm" value={cant}
-                onChange={e => setCant(Math.max(1, parseInt(e.target.value) || 1))} />
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button type="button" onClick={() => setCant(c => Math.max(1, c - 1))}
+                  className="w-8 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-bold text-lg flex items-center justify-center select-none">−</button>
+                <span className="w-8 text-center text-white font-bold text-sm tabular-nums">{cant}</span>
+                <button type="button" onClick={() => setCant(c => c + 1)}
+                  className="w-8 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-bold text-lg flex items-center justify-center select-none">+</button>
+              </div>
               <button type="button" onClick={agregar} disabled={!insumoSel}
                 className="btn-primary px-4 disabled:opacity-40"><Plus size={15} /></button>
             </div>
@@ -315,12 +320,16 @@ function ArregloPersonalizadoModal({ insumos, onClose, onVender, isPending }) {
                       <span className="text-white text-sm">{ing.nombre}</span>
                       <span className="text-xs text-gray-500">{ing.unidad}</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <input type="number" min="1" step="1" className="input w-16 text-center text-sm py-1" value={ing.cantidad}
-                        onChange={e => {
-                          const v = parseInt(e.target.value) || 1;
-                          setIngredientes(prev => prev.map(i => i.insumo_id === ing.insumo_id ? { ...i, cantidad: v } : i));
-                        }} />
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <button type="button"
+                          onClick={() => setIngredientes(prev => prev.map(i => i.insumo_id === ing.insumo_id ? { ...i, cantidad: Math.max(1, i.cantidad - 1) } : i))}
+                          className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold flex items-center justify-center select-none">−</button>
+                        <span className="w-7 text-center text-white font-bold text-sm tabular-nums">{ing.cantidad}</span>
+                        <button type="button"
+                          onClick={() => setIngredientes(prev => prev.map(i => i.insumo_id === ing.insumo_id ? { ...i, cantidad: i.cantidad + 1 } : i))}
+                          className="w-7 h-7 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-bold flex items-center justify-center select-none">+</button>
+                      </div>
                       <button type="button" onClick={() => setIngredientes(prev => prev.filter(i => i.insumo_id !== ing.insumo_id))}
                         className="text-gray-600 hover:text-red-400"><X size={13} /></button>
                     </div>
