@@ -5,13 +5,18 @@ import api, { formatMoney, formatDate } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-function NuevaCompraModal({ onClose, onSave, proveedores, insumos }) {
+function NuevaCompraModal({ onClose, onSave, proveedores, insumos, categorias }) {
   const [form, setForm] = useState({ proveedor_id: '', fecha: new Date().toISOString().split('T')[0], notas: '' });
-  const [items, setItems] = useState([{ insumo_id: '', cantidad: '', costo_unitario: '' }]);
+  const [items, setItems] = useState([{ insumo_id: '', cantidad: '', costo_unitario: '', _cat: '' }]);
 
-  const addItem = () => setItems(p => [...p, { insumo_id: '', cantidad: '', costo_unitario: '' }]);
+  const addItem = () => setItems(p => [...p, { insumo_id: '', cantidad: '', costo_unitario: '', _cat: '' }]);
   const removeItem = (idx) => setItems(p => p.filter((_, i) => i !== idx));
-  const updateItem = (idx, field, val) => setItems(p => p.map((it, i) => i === idx ? { ...it, [field]: val } : it));
+  const updateItem = (idx, field, val) => setItems(p => p.map((it, i) => {
+    if (i !== idx) return it;
+    // Al cambiar categoría, limpiar el insumo seleccionado
+    if (field === '_cat') return { ...it, _cat: val, insumo_id: '' };
+    return { ...it, [field]: val };
+  }));
 
   const total = items.reduce((s, i) => s + (parseFloat(i.cantidad || 0) * parseFloat(i.costo_unitario || 0)), 0);
 
@@ -54,31 +59,74 @@ function NuevaCompraModal({ onClose, onSave, proveedores, insumos }) {
               </button>
             </div>
 
+            {/* Cabecera de columnas */}
+            <div className="grid grid-cols-12 gap-2 mb-1 px-1">
+              <div className="col-span-3 text-xs text-gray-600">Categoría</div>
+              <div className="col-span-4 text-xs text-gray-600">Insumo</div>
+              <div className="col-span-2 text-xs text-gray-600">Cantidad</div>
+              <div className="col-span-2 text-xs text-gray-600">Precio/u</div>
+              <div className="col-span-1"></div>
+            </div>
+
             <div className="space-y-2">
-              {items.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-5">
-                    <select className="input text-sm" value={item.insumo_id} onChange={e => updateItem(idx, 'insumo_id', e.target.value)}>
-                      <option value="">Insumo...</option>
-                      {insumos.map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
-                    </select>
+              {items.map((item, idx) => {
+                const insumosFiltrados = item._cat
+                  ? insumos.filter(i => String(i.categoria_id) === String(item._cat))
+                  : insumos;
+                const catSeleccionada = categorias.find(c => String(c.id) === String(item._cat));
+
+                return (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                    {/* Categoría */}
+                    <div className="col-span-3">
+                      <select className="input text-sm"
+                        value={item._cat}
+                        onChange={e => updateItem(idx, '_cat', e.target.value)}
+                        style={catSeleccionada ? { borderColor: `${catSeleccionada.color}60`, color: catSeleccionada.color } : {}}>
+                        <option value="">Todas...</option>
+                        {categorias.map(c => (
+                          <option key={c.id} value={c.id}>{c.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Insumo */}
+                    <div className="col-span-4">
+                      <select className="input text-sm" value={item.insumo_id}
+                        onChange={e => {
+                          const ins = insumos.find(i => String(i.id) === e.target.value);
+                          updateItem(idx, 'insumo_id', e.target.value);
+                          if (ins?.costo_unitario && !items[idx].costo_unitario) {
+                            setItems(p => p.map((it, i) => i === idx ? { ...it, insumo_id: e.target.value, costo_unitario: ins.costo_unitario } : it));
+                          }
+                        }}>
+                        <option value="">Insumo...</option>
+                        {insumosFiltrados.map(i => (
+                          <option key={i.id} value={i.id}>{i.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Cantidad */}
+                    <div className="col-span-2">
+                      <input className="input text-sm" type="number" step="0.01" placeholder="Cant."
+                        value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value)} />
+                    </div>
+                    {/* Precio */}
+                    <div className="col-span-2">
+                      <input className="input text-sm" type="number" step="1" placeholder="₡/u"
+                        value={item.costo_unitario} onChange={e => updateItem(idx, 'costo_unitario', e.target.value)} />
+                    </div>
+                    {/* Trash */}
+                    <div className="col-span-1 flex items-center justify-between">
+                      <span className="text-xs text-gray-600 tabular-nums hidden sm:block">
+                        {item.cantidad && item.costo_unitario ? formatMoney(parseFloat(item.cantidad) * parseFloat(item.costo_unitario)) : ''}
+                      </span>
+                      <button type="button" onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400 ml-auto">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="col-span-2">
-                    <input className="input text-sm" type="number" step="0.01" placeholder="Cant." value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value)} />
-                  </div>
-                  <div className="col-span-3">
-                    <input className="input text-sm" type="number" step="1" placeholder="Costo/u" value={item.costo_unitario} onChange={e => updateItem(idx, 'costo_unitario', e.target.value)} />
-                  </div>
-                  <div className="col-span-1 text-right text-xs text-gray-500">
-                    {formatMoney(parseFloat(item.cantidad || 0) * parseFloat(item.costo_unitario || 0))}
-                  </div>
-                  <div className="col-span-1 text-center">
-                    <button type="button" onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400">
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="text-right text-sm font-semibold text-white mt-2">
@@ -108,6 +156,7 @@ export default function ComprasPage() {
   const { data: compras = [] } = useQuery({ queryKey: ['compras'], queryFn: () => api.get('/compras').then(r => r.data.data) });
   const { data: proveedores = [] } = useQuery({ queryKey: ['proveedores'], queryFn: () => api.get('/proveedores').then(r => r.data.data) });
   const { data: insumos = [] } = useQuery({ queryKey: ['insumos'], queryFn: () => api.get('/insumos').then(r => r.data.data) });
+  const { data: categorias = [] } = useQuery({ queryKey: ['categorias'], queryFn: () => api.get('/insumos/categorias').then(r => r.data.data) });
 
   const createMut = useMutation({
     mutationFn: (data) => api.post('/compras', data),
@@ -176,6 +225,7 @@ export default function ComprasPage() {
             onSave={(data) => createMut.mutate(data)}
             proveedores={proveedores}
             insumos={insumos}
+            categorias={categorias}
           />
         )}
       </AnimatePresence>
