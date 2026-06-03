@@ -13,6 +13,27 @@ const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3002/api
 const getImgUrl = (url) => {
   if (!url) return null;
   if (url.startsWith('http')) return url;
+
+// Input de cantidad con estado local para permitir borrar y escribir libremente
+function CantidadInput({ value, onChange, className }) {
+  const [local, setLocal] = useState(String(value));
+
+  useEffect(() => { setLocal(String(value)); }, [value]);
+
+  return (
+    <input
+      type="number" min="1" step="1"
+      className={className}
+      value={local}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => {
+        const v = Math.round(Number(local));
+        if (v > 0) { onChange(v); setLocal(String(v)); }
+        else { setLocal(String(value)); } // revierte si queda vacío o 0
+      }}
+    />
+  );
+}
   return `${BACKEND_BASE}${url}`;
 };
 
@@ -431,11 +452,10 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
                           <p className="text-xs text-gray-500">{ing.unidad}</p>
                         </td>
                         <td className="td">
-                          <input
-                            type="number" min="1" step="1"
-                            className="input w-20 text-sm text-center mx-auto block py-1"
+                          <CantidadInput
                             value={ing.cantidad}
-                            onChange={e => cambiarCantidad(ing.insumo_id, e.target.value)}
+                            className="input w-20 text-sm text-center mx-auto block py-1"
+                            onChange={v => cambiarCantidad(ing.insumo_id, v)}
                           />
                         </td>
                         <td className="td text-right text-gray-400 text-sm">
