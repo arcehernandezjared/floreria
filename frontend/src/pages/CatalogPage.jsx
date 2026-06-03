@@ -28,6 +28,10 @@ function CantidadInput({ value, onChange, className }) {
       pattern="[0-9]*"
       className={className}
       value={local}
+      onFocus={e => {
+        const el = e.target;
+        setTimeout(() => el.setSelectionRange(0, el.value.length), 0);
+      }}
       onChange={e => setLocal(e.target.value.replace(/[^0-9]/g, ''))}
       onBlur={() => {
         const v = parseInt(local, 10);
