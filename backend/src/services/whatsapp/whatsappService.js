@@ -192,26 +192,34 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
           continue;
         }
 
-        // Audio / nota de voz
-        const esAudio = msg.message?.pttMessage || msg.message?.audioMessage;
-        if (esAudio) {
-          logger.info(`🎤 Audio recibido de ${numero}, transcribiendo...`);
+        // Audio / nota de voz (PTT y archivos de audio)
+        const audioMsg = msg.message?.audioMessage || msg.message?.pttMessage;
+        if (audioMsg) {
+          const mimeType = audioMsg.mimetype || 'audio/ogg; codecs=opus';
+          logger.info(`🎤 Audio de ${numero} (mime: ${mimeType})`);
           try {
             const buffer = await downloadMediaMessage(msg, 'buffer', {}, {
               logger: silentLogger,
               reuploadRequest: sock.updateMediaMessage,
             });
-            const transcripcion = await transcribeAudio(buffer);
+
+            if (!buffer || buffer.length === 0) {
+              logger.warn('Buffer de audio vacío — no se pudo descargar');
+              await sendMessage(numero, '⚠️ No pude descargar tu audio. ¿Podés escribirme el mensaje?');
+              continue;
+            }
+
+            const transcripcion = await transcribeAudio(buffer, mimeType);
             if (transcripcion) {
-              logger.info(`🎤 Transcripción: "${transcripcion.substring(0, 80)}"`);
               handleMessage(numero, transcripcion).catch(e => logger.error(`handleMessage audio: ${e.message}`));
             } else {
               await sendMessage(numero, '⚠️ No pude entender el audio. ¿Podés escribirme el mensaje?');
             }
           } catch (e) {
-            logger.error(`Audio download error: ${e.message}`);
-            await sendMessage(numero, '⚠️ Hubo un error procesando tu audio. ¿Podés escribirlo?');
+            logger.error(`Audio error: ${e.message}`);
+            await sendMessage(numero, '⚠️ Hubo un error con tu audio. ¿Podés escribirlo?');
           }
+          continue;
         }
       }
     });
