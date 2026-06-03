@@ -8,7 +8,7 @@ import {
   AlertTriangle, Calendar, TrendingDown, CheckCircle, Lock
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import api, { formatMoney } from '../utils/api';
 
 const NAV_ITEMS = [
