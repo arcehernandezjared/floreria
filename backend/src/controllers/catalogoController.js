@@ -309,4 +309,65 @@ async function uploadImagen(req, res) {
 }
 
 
-module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, getVentas, uploadImagen };
+async function ventaPersonalizada(req, res) {
+  try {
+    const { ingredientes, precio_venta, nombre_cliente, canal, notas, guardar_catalogo, nombre_arreglo, categoria } = req.body;
+
+    if (!ingredientes || ingredientes.length === 0)
+      return res.status(400).json({ success: false, message: 'Agrega al menos un ingrediente' });
+    if (!precio_venta || parseFloat(precio_venta) <= 0)
+      return res.status(400).json({ success: false, message: 'El precio de venta es requerido' });
+
+    // Verificar stock de cada ingrediente
+    const insumosData = [];
+    for (const ing of ingredientes) {
+      const insumo = await queryOne('SELECT * FROM insumos WHERE id = ? AND activo = 1', [ing.insumo_id]);
+      if (!insumo) return res.status(400).json({ success: false, message: `Insumo no encontrado (id: ${ing.insumo_id})` });
+      if (parseFloat(insumo.stock_actual) < parseFloat(ing.cantidad))
+        return res.status(400).json({ success: false, message: `Stock insuficiente de ${insumo.nombre}: hay ${insumo.stock_actual} ${insumo.unidad}` });
+      insumosData.push({ ...insumo, cantidad_usar: parseFloat(ing.cantidad) });
+    }
+
+    const costo_produccion = insumosData.reduce((s, i) => s + i.cantidad_usar * parseFloat(i.costo_unitario), 0);
+    const nombreArreglo = (nombre_arreglo || 'Arreglo personalizado').trim();
+
+    await transaction(async (conn) => {
+      let catalogo_id = null;
+
+      if (guardar_catalogo) {
+        const [result] = await conn.query(
+          `INSERT INTO catalogo (nombre, categoria, precio_venta, costo_calculado, margen_minimo, disponible_externo)
+           VALUES (?, ?, ?, ?, 30, 1)`,
+          [nombreArreglo, categoria || 'General', precio_venta, costo_produccion]
+        );
+        catalogo_id = result.insertId;
+        for (const ing of ingredientes) {
+          await conn.query('INSERT INTO ficha_ingredientes (catalogo_id, insumo_id, cantidad) VALUES (?,?,?)',
+            [catalogo_id, ing.insumo_id, ing.cantidad]);
+        }
+      }
+
+      await conn.query(
+        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, notas, nombre_cliente)
+         VALUES (?,?,?,?,?,?,?)`,
+        [catalogo_id, nombreArreglo, canal || 'mostrador', precio_venta, costo_produccion, notas || null, nombre_cliente || null]
+      );
+
+      for (const ins of insumosData) {
+        await conn.query('UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?', [ins.cantidad_usar, ins.id]);
+      }
+    });
+
+    logger.info(`ventaPersonalizada: ${nombreArreglo} — ₡${precio_venta}${guardar_catalogo ? ' [guardado en catálogo]' : ''}`);
+    res.json({
+      success: true,
+      message: guardar_catalogo ? `Venta registrada y "${nombreArreglo}" guardado en catálogo` : 'Venta registrada',
+      data: { costo_produccion, guardado_catalogo: !!guardar_catalogo }
+    });
+  } catch (error) {
+    logger.error(`ventaPersonalizada: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, getVentas, uploadImagen, ventaPersonalizada };

@@ -142,6 +142,31 @@ const TOOLS = [
     name: 'termometro_nomina',
     description: 'Consulta el estado del fondo de ahorro para sueldos. Úsala cuando pregunten por la nómina, el fondo de sueldos, cuánto se ha ahorrado.',
     input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'registrar_venta_personalizada',
+    description: 'Registra una venta de un arreglo PERSONALIZADO que NO está en el catálogo. Úsala cuando la persona mencione ingredientes específicos (ej: "4 rosas y 2 lirios", "un arreglo con rosas y girasoles") en lugar de un nombre de catálogo. IMPORTANTE: si no dice el precio, pregúntalo antes de registrar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        ingredientes: {
+          type: 'array',
+          description: 'Lista de ingredientes del arreglo',
+          items: {
+            type: 'object',
+            properties: {
+              nombre_insumo: { type: 'string', description: 'Nombre del insumo tal como aparece en el sistema' },
+              cantidad: { type: 'number', description: 'Cantidad a usar' }
+            },
+            required: ['nombre_insumo', 'cantidad']
+          }
+        },
+        precio_venta: { type: 'number', description: 'Precio de venta en colones' },
+        nombre_cliente: { type: 'string', description: 'Nombre del cliente (opcional)' },
+        nombre_arreglo: { type: 'string', description: 'Nombre descriptivo del arreglo (opcional)' }
+      },
+      required: ['ingredientes', 'precio_venta']
+    }
   }
 ];
 
@@ -157,7 +182,8 @@ async function executeTool(name, input) {
     case 'registrar_gasto':      return await registrarGasto(input);
     case 'consultar_gastos':     return await consultarGastos(input);
     case 'consultar_pedidos':    return await consultarPedidos(input);
-    case 'termometro_nomina':    return await termometroNomina();
+    case 'termometro_nomina':             return await termometroNomina();
+    case 'registrar_venta_personalizada': return await registrarVentaPersonalizada(input);
     default: return { error: 'Herramienta no reconocida' };
   }
 }
@@ -418,6 +444,56 @@ async function termometroNomina() {
   };
 }
 
+async function registrarVentaPersonalizada({ ingredientes, precio_venta, nombre_cliente, nombre_arreglo }) {
+  if (!precio_venta || precio_venta <= 0)
+    return { exito: false, mensaje: '¿Cuál es el precio de venta del arreglo? Por favor indícame el precio en colones.' };
+  if (!ingredientes || ingredientes.length === 0)
+    return { exito: false, mensaje: 'No entendí los ingredientes del arreglo. ¿Qué flores o materiales lleva?' };
+
+  const insumosResueltos = [];
+  const noEncontrados = [];
+
+  for (const ing of ingredientes) {
+    const insumo = await queryOne(
+      'SELECT * FROM insumos WHERE nombre LIKE ? AND activo = 1 LIMIT 1',
+      [`%${ing.nombre_insumo}%`]
+    );
+    if (!insumo) {
+      noEncontrados.push(ing.nombre_insumo);
+    } else if (parseFloat(insumo.stock_actual) < ing.cantidad) {
+      return { exito: false, mensaje: `⚠️ Stock insuficiente de *${insumo.nombre}*: hay ${insumo.stock_actual} ${insumo.unidad}, el arreglo necesita ${ing.cantidad}.` };
+    } else {
+      insumosResueltos.push({ ...insumo, cantidad_usar: ing.cantidad });
+    }
+  }
+
+  if (noEncontrados.length > 0)
+    return { exito: false, mensaje: `No encontré estos insumos: *${noEncontrados.join(', ')}*. ¿Cómo se llaman exactamente en el sistema?` };
+
+  const costo_produccion = insumosResueltos.reduce((s, i) => s + i.cantidad_usar * parseFloat(i.costo_unitario), 0);
+  const nombreArreglo = nombre_arreglo || 'Arreglo personalizado';
+
+  await transaction(async (conn) => {
+    await conn.query(
+      `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, notas, nombre_cliente)
+       VALUES (null,?,'whatsapp',?,?,'Arreglo personalizado vía WhatsApp',?)`,
+      [nombreArreglo, precio_venta, costo_produccion, nombre_cliente || null]
+    );
+    for (const ins of insumosResueltos) {
+      await conn.query('UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?', [ins.cantidad_usar, ins.id]);
+    }
+  });
+
+  const margen = precio_venta > 0 ? (((precio_venta - costo_produccion) / precio_venta) * 100).toFixed(1) : 0;
+  const listaIng = insumosResueltos.map(i => `  • ${i.cantidad_usar} ${i.unidad} de ${i.nombre}`).join('\n');
+  logger.info(`VentaPersonalizada WA: ${nombreArreglo} — ₡${precio_venta}`);
+
+  return {
+    exito: true,
+    mensaje: `✅ Venta registrada:\n🌺 ${nombreArreglo}\n${listaIng}\n💰 ₡${Number(precio_venta).toLocaleString('es-CR')}${nombre_cliente ? ` — ${nombre_cliente}` : ''}\nMargen: ${margen}%`
+  };
+}
+
 async function registrarVenta({ nombre_arreglo, nombre_cliente, precio_venta, notas }) {
   const coincidencias = await query(
     'SELECT id, nombre, precio_venta, activo FROM catalogo WHERE nombre LIKE ? AND activo = 1 ORDER BY nombre LIMIT 5',
@@ -495,7 +571,8 @@ CAPACIDADES — QUÉ PUEDES HACER
 
 🌺 CATÁLOGO Y VENTAS
 - Buscar arreglos, ver precios y márgenes
-- Registrar ventas desde WhatsApp
+- Registrar ventas de arreglos del catálogo
+- Registrar ventas de arreglos PERSONALIZADOS (con receta de ingredientes, aunque no estén en el catálogo)
 - Ver historial de ventas (hoy, ayer, semana, mes)
 - Ver estado general del negocio
 

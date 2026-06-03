@@ -19,6 +19,7 @@ router.get('/ventas', ctrl.getVentas);
 router.post('/recalcular-costos', ctrl.recalcularCostos);
 router.post('/venta', ctrl.registrarVenta);
 router.post('/upload-imagen', upload.single('imagen'), ctrl.uploadImagen);
+router.post('/venta-personalizada', ctrl.ventaPersonalizada);
 router.get('/:id', ctrl.getArregloConFicha);
 router.post('/', ctrl.createArreglo);
 router.put('/:id', ctrl.updateArreglo);

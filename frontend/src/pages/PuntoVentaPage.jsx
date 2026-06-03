@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, Flower2,
-  User, Tag, X, Leaf, LayoutGrid, Printer, Mail, Send, AtSign, Layers
+  User, Tag, X, Leaf, LayoutGrid, Printer, Mail, Send, AtSign, Layers, Wand2
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -214,6 +214,164 @@ function EmailReciboInput({ defaultEmail, onEnviar, enviando }) {
   );
 }
 
+function ArregloPersonalizadoModal({ insumos, onClose, onVender, isPending }) {
+  const [nombre, setNombre]       = useState('Arreglo personalizado');
+  const [precio, setPrecio]       = useState('');
+  const [ingredientes, setIngredientes] = useState([]);
+  const [guardar, setGuardar]     = useState(false);
+  const [categoria, setCategoria] = useState('General');
+  const [buscar, setBuscar]       = useState('');
+  const [insumoSel, setInsumoSel] = useState(null);
+  const [cant, setCant]           = useState(1);
+  const [showDrop, setShowDrop]   = useState(false);
+
+  const insumosFiltrados = insumos.filter(i =>
+    buscar && i.nombre.toLowerCase().includes(buscar.toLowerCase()) && parseFloat(i.stock_actual) > 0
+  ).slice(0, 8);
+
+  const costo = ingredientes.reduce((s, i) => s + i.cantidad * parseFloat(i.costo_unitario), 0);
+  const margen = parseFloat(precio) > 0 && costo > 0
+    ? (((parseFloat(precio) - costo) / parseFloat(precio)) * 100).toFixed(1) : null;
+
+  const agregar = () => {
+    if (!insumoSel) return;
+    setIngredientes(prev => {
+      const existe = prev.find(i => i.insumo_id === insumoSel.id);
+      if (existe) return prev.map(i => i.insumo_id === insumoSel.id ? { ...i, cantidad: i.cantidad + cant } : i);
+      return [...prev, { insumo_id: insumoSel.id, nombre: insumoSel.nombre, unidad: insumoSel.unidad, costo_unitario: insumoSel.costo_unitario, cantidad: cant }];
+    });
+    setInsumoSel(null); setBuscar(''); setCant(1); setShowDrop(false);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (ingredientes.length === 0) return toast.error('Agrega al menos un ingrediente');
+    if (!precio || parseFloat(precio) <= 0) return toast.error('Escribe el precio de venta');
+    onVender({
+      ingredientes: ingredientes.map(i => ({ insumo_id: i.insumo_id, cantidad: i.cantidad })),
+      precio_venta: parseFloat(precio),
+      nombre_arreglo: nombre,
+      guardar_catalogo: guardar,
+      categoria,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 p-4 overflow-y-auto">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="card w-full max-w-lg my-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Wand2 size={18} className="text-brand-400" />
+            <h3 className="text-lg font-semibold text-white">Arreglo a medida</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Nombre */}
+          <div>
+            <label className="label">Nombre del arreglo</label>
+            <input className="input" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Arreglo personalizado" />
+          </div>
+
+          {/* Buscador de ingredientes */}
+          <div>
+            <label className="label mb-2 block">Ingredientes</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input className="input pl-9 text-sm" placeholder="Buscar flor o insumo..."
+                  value={buscar}
+                  onChange={e => { setBuscar(e.target.value); setShowDrop(true); setInsumoSel(null); }}
+                  onFocus={() => setShowDrop(true)} />
+                <AnimatePresence>
+                  {showDrop && insumosFiltrados.length > 0 && (
+                    <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                      className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden z-20 shadow-xl">
+                      {insumosFiltrados.map(ins => (
+                        <button key={ins.id} type="button"
+                          onClick={() => { setInsumoSel(ins); setBuscar(ins.nombre); setShowDrop(false); }}
+                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-700 flex items-center justify-between">
+                          <span className="text-white">{ins.nombre}</span>
+                          <span className="text-xs text-gray-500">{parseFloat(ins.stock_actual)} {ins.unidad} disponible</span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <input type="number" min="1" step="1" className="input w-20 text-center text-sm" value={cant}
+                onChange={e => setCant(Math.max(1, parseInt(e.target.value) || 1))} />
+              <button type="button" onClick={agregar} disabled={!insumoSel}
+                className="btn-primary px-4 disabled:opacity-40"><Plus size={15} /></button>
+            </div>
+
+            {ingredientes.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {ingredientes.map(ing => (
+                  <div key={ing.insumo_id} className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-sm">{ing.nombre}</span>
+                      <span className="text-xs text-gray-500">{ing.unidad}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input type="number" min="1" step="1" className="input w-16 text-center text-sm py-1" value={ing.cantidad}
+                        onChange={e => {
+                          const v = parseInt(e.target.value) || 1;
+                          setIngredientes(prev => prev.map(i => i.insumo_id === ing.insumo_id ? { ...i, cantidad: v } : i));
+                        }} />
+                      <button type="button" onClick={() => setIngredientes(prev => prev.filter(i => i.insumo_id !== ing.insumo_id))}
+                        className="text-gray-600 hover:text-red-400"><X size={13} /></button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-between text-xs text-gray-500 px-1">
+                  <span>Costo estimado</span>
+                  <span className="text-yellow-400 font-medium">{formatMoney(Math.round(costo))}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Precio */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Precio de venta (₡) *</label>
+              <input className="input font-bold text-brand-400" type="number" step="100" placeholder="0"
+                value={precio} onChange={e => setPrecio(e.target.value)} required />
+              {margen !== null && (
+                <p className={`text-xs mt-1 ${parseFloat(margen) >= 30 ? 'text-emerald-400' : parseFloat(margen) >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  Margen: {margen}%
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col justify-end">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" className="rounded" checked={guardar}
+                  onChange={e => setGuardar(e.target.checked)} />
+                <span className="text-sm text-gray-300">Guardar en catálogo</span>
+              </label>
+              {guardar && (
+                <input className="input text-sm mt-2" placeholder="Categoría (ej: Románticos)"
+                  value={categoria} onChange={e => setCategoria(e.target.value)} />
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button type="submit" disabled={isPending || ingredientes.length === 0}
+              className="btn-primary flex-1 justify-center disabled:opacity-40">
+              <CheckCircle size={15} /> {isPending ? 'Registrando...' : 'Registrar venta'}
+            </button>
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function PuntoVentaPage() {
   const [tab, setTab]               = useState('arreglos');
   const [busqueda, setBusqueda]     = useState('');
@@ -233,6 +391,7 @@ export default function PuntoVentaPage() {
   const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [pagoCliente, setPagoCliente]     = useState('');
   const [vistaMovil, setVistaMovil]       = useState('productos');
+  const [modalPersonalizado, setModalPersonalizado] = useState(false);
   const qc = useQueryClient();
 
   // ── Queries ───────────────────────────────────────────────────────────
@@ -251,6 +410,18 @@ export default function PuntoVentaPage() {
     s + (i.tipo === 'insumo' ? i.precio_unitario : i.precio_venta) * i.cantidad, 0);
   const descuentoMonto = subtotal * (descuento / 100);
   const total = subtotal - descuentoMonto;
+
+  // ── Venta personalizada mutation ──────────────────────────────────────
+  const ventaPersonalizadaMut = useMutation({
+    mutationFn: (data) => api.post('/catalogo/venta-personalizada', { ...data, canal }),
+    onSuccess: (res) => {
+      qc.invalidateQueries(['catalogo-pos']);
+      qc.invalidateQueries(['insumos-pos']);
+      setModalPersonalizado(false);
+      toast.success(res.data.message || 'Venta registrada');
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al registrar'),
+  });
 
   // ── Venta mutation ────────────────────────────────────────────────────
   const ventaMutation = useMutation({
@@ -467,7 +638,7 @@ export default function PuntoVentaPage() {
         </div>
 
         {/* Tabs tipo producto */}
-        <div className="flex gap-2 mb-3 flex-shrink-0">
+        <div className="flex gap-2 mb-3 flex-shrink-0 flex-wrap">
           <button onClick={() => { setTab('arreglos'); setBusqueda(''); setCategoriaFiltro(''); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === 'arreglos' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
             <LayoutGrid size={15} /> Arreglos
@@ -475,6 +646,10 @@ export default function PuntoVentaPage() {
           <button onClick={() => { setTab('venta-general'); setBusqueda(''); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === 'venta-general' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
             <Layers size={15} /> Venta General
+          </button>
+          <button onClick={() => setModalPersonalizado(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-gray-900 text-emerald-400 hover:text-emerald-300 ml-auto">
+            <Wand2 size={15} /> A medida
           </button>
         </div>
 
@@ -888,6 +1063,18 @@ export default function PuntoVentaPage() {
               )}
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal Arreglo Personalizado ── */}
+      <AnimatePresence>
+        {modalPersonalizado && (
+          <ArregloPersonalizadoModal
+            insumos={insumos}
+            onClose={() => setModalPersonalizado(false)}
+            onVender={(data) => ventaPersonalizadaMut.mutate(data)}
+            isPending={ventaPersonalizadaMut.isPending}
+          />
         )}
       </AnimatePresence>
 
