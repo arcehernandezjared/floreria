@@ -23,12 +23,14 @@ function CantidadInput({ value, onChange, className }) {
 
   return (
     <input
-      type="number" min="1" step="1"
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
       className={className}
       value={local}
-      onChange={e => setLocal(e.target.value)}
+      onChange={e => setLocal(e.target.value.replace(/[^0-9]/g, ''))}
       onBlur={() => {
-        const v = Math.round(Number(local));
+        const v = parseInt(local, 10);
         if (v > 0) { onChange(v); setLocal(String(v)); }
         else { setLocal(String(value)); }
       }}
