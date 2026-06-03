@@ -179,7 +179,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Topbar */}
-        <header className="h-14 bg-gray-900/80 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-sm flex-shrink-0">
+        <header className="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6 flex-shrink-0">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-white transition-colors">
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
