@@ -4,6 +4,8 @@ const logger = require('../utils/logger');
 async function ensureMetaColumns() {
   try { await query('ALTER TABLE config_nomina ADD COLUMN gastos_meta DECIMAL(12,2) DEFAULT 0'); } catch (_) {}
   try { await query('ALTER TABLE config_nomina ADD COLUMN dias_laborales INT DEFAULT 26'); } catch (_) {}
+  try { await query('ALTER TABLE config_nomina ADD COLUMN salarios_monto DECIMAL(12,2) DEFAULT 0'); } catch (_) {}
+  try { await query('ALTER TABLE config_nomina ADD COLUMN num_empleados INT DEFAULT 1'); } catch (_) {}
 }
 
 async function getConfig(req, res) {
@@ -22,26 +24,28 @@ async function getConfig(req, res) {
 
 async function updateConfig(req, res) {
   try {
-    const { porcentaje_provision, meta_quincena, periodo_dias, numero_alertas, gastos_meta, dias_laborales } = req.body;
+    const { porcentaje_provision, meta_quincena, periodo_dias, numero_alertas, gastos_meta, dias_laborales, salarios_monto, num_empleados } = req.body;
     const config = await queryOne('SELECT * FROM config_nomina LIMIT 1');
 
     if (config) {
       await query(
-        'UPDATE config_nomina SET porcentaje_provision=?, meta_quincena=?, periodo_dias=?, numero_alertas=?, gastos_meta=?, dias_laborales=? WHERE id=?',
+        'UPDATE config_nomina SET porcentaje_provision=?, meta_quincena=?, periodo_dias=?, numero_alertas=?, gastos_meta=?, dias_laborales=?, salarios_monto=?, num_empleados=? WHERE id=?',
         [
           porcentaje_provision ?? config.porcentaje_provision,
           meta_quincena       ?? config.meta_quincena,
           periodo_dias        ?? config.periodo_dias,
           numero_alertas !== undefined ? (numero_alertas || null) : (config.numero_alertas ?? null),
-          gastos_meta  !== undefined ? gastos_meta  : (config.gastos_meta ?? 0),
+          gastos_meta    !== undefined ? gastos_meta    : (config.gastos_meta ?? 0),
           dias_laborales !== undefined ? dias_laborales : (config.dias_laborales ?? 26),
+          salarios_monto !== undefined ? salarios_monto : (config.salarios_monto ?? 0),
+          num_empleados  !== undefined ? num_empleados  : (config.num_empleados ?? 1),
           config.id
         ]
       );
     } else {
       await query(
-        'INSERT INTO config_nomina (porcentaje_provision, meta_quincena, periodo_dias, numero_alertas, gastos_meta, dias_laborales) VALUES (?, ?, ?, ?, ?, ?)',
-        [porcentaje_provision || 15, meta_quincena || 600000, periodo_dias || 15, numero_alertas || null, gastos_meta || 0, dias_laborales || 26]
+        'INSERT INTO config_nomina (porcentaje_provision, meta_quincena, periodo_dias, numero_alertas, gastos_meta, dias_laborales, salarios_monto, num_empleados) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [porcentaje_provision || 15, meta_quincena || 600000, periodo_dias || 15, numero_alertas || null, gastos_meta || 0, dias_laborales || 26, salarios_monto || 0, num_empleados || 1]
       );
     }
 
