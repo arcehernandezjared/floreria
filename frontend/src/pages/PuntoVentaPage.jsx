@@ -232,6 +232,7 @@ export default function PuntoVentaPage() {
   const [modalRecibo, setModalRecibo]     = useState(false);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [pagoCliente, setPagoCliente]     = useState('');
+  const [vistaMovil, setVistaMovil]       = useState('productos');
   const qc = useQueryClient();
 
   // ── Queries ───────────────────────────────────────────────────────────
@@ -304,6 +305,7 @@ export default function PuntoVentaPage() {
     setModalRecibo(false);
     setVentaSnapshot(null);
     setCarrito([]);
+    setVistaMovil('productos');
     setCliente('');
     setEmailCliente('');
     setDescuento(0);
@@ -432,13 +434,30 @@ export default function PuntoVentaPage() {
   };
 
   return (
-    <div className="flex gap-6 h-full" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
+    <div className="flex flex-col lg:flex-row lg:gap-6" style={{ height: 'calc(100dvh - 5rem)', maxHeight: 'calc(100dvh - 5rem)' }}>
 
       {/* ── Panel Izquierdo ── */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${vistaMovil === 'carrito' ? 'hidden lg:flex' : 'flex'}`}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Nav móvil — solo en tablet/móvil */}
+        <div className="flex lg:hidden gap-1 mb-3 bg-gray-900 rounded-xl p-1 flex-shrink-0">
+          <button onClick={() => setVistaMovil('productos')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${vistaMovil === 'productos' ? 'bg-brand-600 text-white' : 'text-gray-400'}`}>
+            <LayoutGrid size={15} /> Productos
+          </button>
+          <button onClick={() => setVistaMovil('carrito')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all relative ${vistaMovil === 'carrito' ? 'bg-brand-600 text-white' : 'text-gray-400'}`}>
+            <ShoppingCart size={15} /> Carrito
+            {carrito.length > 0 && (
+              <span className="bg-brand-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full leading-none ml-1">
+                {carrito.reduce((s, i) => s + i.cantidad, 0)}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Header — oculto en móvil para ahorrar espacio */}
+        <div className="hidden lg:flex items-center justify-between mb-4 flex-shrink-0">
           <div>
             <h1 className="text-2xl font-bold text-white">Punto de Venta</h1>
             <p className="text-gray-500 text-sm">
@@ -447,36 +466,36 @@ export default function PuntoVentaPage() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-4">
+        {/* Tabs tipo producto */}
+        <div className="flex gap-2 mb-3 flex-shrink-0">
           <button onClick={() => { setTab('arreglos'); setBusqueda(''); setCategoriaFiltro(''); }}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === 'arreglos' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === 'arreglos' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
             <LayoutGrid size={15} /> Arreglos
           </button>
           <button onClick={() => { setTab('venta-general'); setBusqueda(''); }}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === 'venta-general' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === 'venta-general' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
             <Layers size={15} /> Venta General
           </button>
         </div>
 
         {/* Barra de búsqueda + orden + botón categorías */}
-        <div className="flex gap-2 mb-3">
+        <div className="flex gap-2 mb-3 flex-shrink-0">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input className="input w-full pl-9 text-sm"
-              placeholder="Buscar por nombre o código (Enter para agregar)"
+              placeholder="Buscar por nombre o código..."
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
               onKeyDown={handleBusquedaEnter} />
           </div>
-          <select className="input text-xs py-2 w-32 flex-shrink-0" value={orden} onChange={e => setOrden(e.target.value)}>
+          <select className="input text-xs py-2 w-28 flex-shrink-0" value={orden} onChange={e => setOrden(e.target.value)}>
             <option value="nombre">A – Z</option>
             <option value="precio_asc">Precio ↑</option>
             <option value="precio_desc">Precio ↓</option>
           </select>
           {tab === 'venta-general' && (
             <button onClick={() => setModalCategorias(true)}
-              className="btn-secondary flex-shrink-0 flex items-center gap-2 text-sm px-4">
+              className="btn-secondary flex-shrink-0 flex items-center gap-2 text-sm px-3">
               <Layers size={15} /> Categorías
             </button>
           )}
@@ -484,7 +503,7 @@ export default function PuntoVentaPage() {
 
         {/* Arreglos: pills de subcategoría */}
         {tab === 'arreglos' && categoriasArreglos.length > 0 && (
-          <div className="flex gap-2 flex-wrap mb-3">
+          <div className="flex gap-2 flex-wrap mb-3 flex-shrink-0">
             <button onClick={() => setCategoriaFiltro('')}
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!categoriaFiltro ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
               Todos ({catalogo.filter(a => a.activo).length})
@@ -531,7 +550,7 @@ export default function PuntoVentaPage() {
               <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : tab === 'arreglos' ? (
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
               {catalogoFiltrado.map(arreglo => {
                 const enCarrito = carrito.find(i => i._key === `cat-${arreglo.id}`);
                 const margen = arreglo.precio_venta && arreglo.costo_calculado
@@ -584,7 +603,7 @@ export default function PuntoVentaPage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
               {insumosFiltrados.map(insumo => {
                 const enCarrito = carrito.find(i => i._key === `ins-${insumo.id}`);
                 const stockOk = parseFloat(insumo.stock_actual) > 0;
@@ -631,9 +650,25 @@ export default function PuntoVentaPage() {
       </div>
 
       {/* ── Carrito ── */}
-      <div className="w-80 flex-shrink-0 flex flex-col">
-        <div className="card flex-1 flex flex-col p-0 overflow-hidden">
-          <div className="p-4 border-b border-gray-800 flex items-center gap-2">
+      <div className={`flex flex-col lg:w-80 lg:flex-shrink-0 ${vistaMovil === 'productos' ? 'hidden lg:flex' : 'flex flex-1 min-h-0'}`}>
+        {/* Nav móvil en la vista carrito */}
+        <div className="flex lg:hidden gap-1 mb-3 bg-gray-900 rounded-xl p-1 flex-shrink-0">
+          <button onClick={() => setVistaMovil('productos')}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-gray-400 transition-all">
+            <LayoutGrid size={15} /> Productos
+          </button>
+          <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-brand-600 text-white">
+            <ShoppingCart size={15} /> Carrito
+            {carrito.length > 0 && (
+              <span className="bg-white/20 text-white text-xs font-bold px-1.5 py-0.5 rounded-full leading-none">
+                {carrito.reduce((s, i) => s + i.cantidad, 0)}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="card flex-1 flex flex-col p-0 overflow-hidden min-h-0">
+          <div className="p-4 border-b border-gray-800 hidden lg:flex items-center gap-2">
             <ShoppingCart size={18} className="text-brand-400" />
             <h2 className="font-semibold text-white">Carrito</h2>
             {carrito.length > 0 && (
