@@ -27,9 +27,9 @@ const MOTIVO_LABELS = {
 const DONUT_COLORS = ['#ef4444', '#f59e0b', '#8b5cf6', '#3b82f6'];
 
 const fade = (delay = 0) => ({
-  initial: { opacity: 0, y: 14 },
-  animate: { opacity: 1, y: 0 },
-  transition: { delay, duration: 0.35 }
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  transition: { delay, duration: 0.3 }
 });
 
 // ── Tarjeta grande KPI ────────────────────────────────────────────────────────
