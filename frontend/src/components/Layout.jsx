@@ -8,7 +8,7 @@ import {
   AlertTriangle, Calendar, TrendingDown, CheckCircle, Lock
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import api, { formatMoney } from '../utils/api';
 
 const NAV_ITEMS = [
@@ -114,15 +114,8 @@ export default function Layout() {
     <div className="flex h-screen bg-gray-950 overflow-hidden">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.aside
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 256, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden"
-          >
+      <aside className={`flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-200 ${sidebarOpen ? 'w-64 overflow-hidden' : 'w-0 overflow-hidden'}`}>
+        <div className={sidebarOpen ? 'flex flex-col h-full min-w-[256px]' : 'hidden'}>
             {/* Logo */}
             <div className="p-6 border-b border-gray-800">
               <div className="flex items-center gap-3">
@@ -171,9 +164,8 @@ export default function Layout() {
                 <LogOut size={15} /> Cerrar sesión
               </button>
             </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
+        </div>
+      </aside>
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
