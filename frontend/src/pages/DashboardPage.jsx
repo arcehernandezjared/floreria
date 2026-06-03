@@ -13,7 +13,6 @@ import {
   Tooltip, Legend, Filler
 } from 'chart.js';
 import api, { formatMoney } from '../utils/api';
-import { motion } from 'framer-motion';
 import useAuthStore from '../store/authStore';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, ArcElement, Tooltip, Legend, Filler);
@@ -26,17 +25,12 @@ const MOTIVO_LABELS = {
 };
 const DONUT_COLORS = ['#ef4444', '#f59e0b', '#8b5cf6', '#3b82f6'];
 
-const fade = (delay = 0) => ({
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  transition: { delay, duration: 0.3 }
-});
+const fade = () => ({});
 
 // ── Tarjeta grande KPI ────────────────────────────────────────────────────────
-function TarjetaGrande({ Icon, titulo, valor, detalle, colorFondo, colorValor, iconBg, iconColor, delay }) {
+function TarjetaGrande({ Icon, titulo, valor, detalle, colorFondo, colorValor, iconBg, iconColor }) {
   return (
-    <motion.div {...fade(delay)}
-      className={`rounded-2xl p-6 border ${colorFondo}`}>
+    <div className={`rounded-2xl p-6 border ${colorFondo}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-400 leading-snug uppercase tracking-wide">{titulo}</p>
@@ -47,7 +41,7 @@ function TarjetaGrande({ Icon, titulo, valor, detalle, colorFondo, colorValor, i
           <Icon size={20} className={iconColor} />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -114,6 +108,7 @@ export default function DashboardPage() {
   const lineOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -157,6 +152,7 @@ export default function DashboardPage() {
   const doughnutOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     cutout: '72%',
     plugins: {
       legend: { display: false },
@@ -261,7 +257,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Ahorro para sueldos ── */}
-      <motion.div {...fade(0.25)} className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="h-1" style={{ background: barColor }} />
         <div className="p-6">
           <div className="flex items-start justify-between mb-4 gap-4">
@@ -285,12 +281,9 @@ export default function DashboardPage() {
           </div>
 
           <div className="relative h-5 bg-gray-800 rounded-full overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(100, pct)}%` }}
-              transition={{ duration: 1.2, ease: 'easeOut' }}
+            <div
               className="h-full rounded-full"
-              style={{ background: `linear-gradient(90deg, ${barColor}88, ${barColor})` }}
+              style={{ width: `${Math.min(100, pct)}%`, background: `linear-gradient(90deg, ${barColor}88, ${barColor})` }}
             />
             {[25, 50, 75].map(mark => (
               <div key={mark} className="absolute top-0 bottom-0 w-px bg-gray-900/70" style={{ left: `${mark}%` }} />
@@ -312,13 +305,13 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* ── Gráficas ── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
         {/* Ventas últimos 7 días */}
-        <motion.div {...fade(0.3)} className="card lg:col-span-3">
+        <div className="card lg:col-span-3">
           <div className="flex items-center justify-between mb-5">
             <div>
               <div className="flex items-center gap-2">
@@ -336,10 +329,10 @@ export default function DashboardPage() {
           <div className="h-52">
             <Line data={lineChartData} options={lineOptions} />
           </div>
-        </motion.div>
+        </div>
 
         {/* Razones de pérdidas */}
-        <motion.div {...fade(0.34)} className="card lg:col-span-2">
+        <div className="card lg:col-span-2">
           <div className="mb-4">
             <div className="flex items-center gap-2">
               <Trash2 size={16} className="text-gray-500" />
@@ -373,12 +366,12 @@ export default function DashboardPage() {
               </div>
             </>
           )}
-        </motion.div>
+        </div>
       </div>
 
       {/* ── Pedidos Pendientes ── */}
       {(dash?.pedidos_pendientes?.count || 0) > 0 && (
-        <motion.div {...fade(0.35)} className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-5">
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center">
@@ -416,14 +409,14 @@ export default function DashboardPage() {
               );
             })}
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* ── Alertas ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* Inventario bajo */}
-        <motion.div {...fade(0.38)} className="card">
+        <div className="card">
           <div className="flex items-center gap-2 mb-4">
             <Package size={16} className="text-gray-500" />
             <h3 className="text-base font-bold text-white">Materiales que se están acabando</h3>
@@ -469,10 +462,10 @@ export default function DashboardPage() {
               })}
             </div>
           )}
-        </motion.div>
+        </div>
 
         {/* Arreglos con ganancia baja */}
-        <motion.div {...fade(0.42)} className="card">
+        <div className="card">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle size={16} className="text-gray-500" />
             <h3 className="text-base font-bold text-white">Arreglos que ganan poco</h3>
@@ -506,11 +499,11 @@ export default function DashboardPage() {
               ))}
             </div>
           )}
-        </motion.div>
+        </div>
       </div>
 
       {/* ── Pérdidas de esta semana ── */}
-      <motion.div {...fade(0.46)} className="card">
+      <div className="card">
         <div className="flex items-center gap-2 mb-5">
           <Trash2 size={16} className="text-gray-500" />
           <h3 className="text-base font-bold text-white">Flores más perdidas esta semana</h3>
@@ -545,7 +538,7 @@ export default function DashboardPage() {
             })}
           </div>
         )}
-      </motion.div>
+      </div>
 
     </div>
   );
