@@ -354,8 +354,7 @@ export default function PuntoVentaPage() {
     setCarrito(prev => {
       const existe = prev.find(i => i._key === key);
       if (existe) return prev.map(i => i._key === key ? { ...i, cantidad: i.cantidad + 1 } : i);
-      const precioBase = parseFloat(insumo.precio_venta) > 0 ? parseFloat(insumo.precio_venta) : parseFloat(insumo.costo_unitario);
-      return [...prev, { _key: key, tipo: 'insumo', id: insumo.id, nombre: insumo.nombre, unidad: insumo.unidad, cantidad: 1, precio_unitario: precioBase, costo_unitario: insumo.costo_unitario, tiene_precio_venta: !!insumo.precio_venta }];
+      return [...prev, { _key: key, tipo: 'insumo', id: insumo.id, nombre: insumo.nombre, unidad: insumo.unidad, cantidad: 1, precio_unitario: parseFloat(insumo.costo_unitario) || 0, costo_unitario: insumo.costo_unitario }];
     });
   };
 
@@ -667,16 +666,12 @@ export default function PuntoVentaPage() {
                     </div>
                     {item.tipo === 'insumo' && (
                       <div className="mb-2">
-                        <label className="text-xs mb-1 flex items-center gap-1.5 block">
-                          <span className="text-gray-500">Precio (₡ c/u)</span>
-                          {item.tiene_precio_venta && <span className="text-emerald-500 text-xs">· registrado</span>}
-                        </label>
+                        <label className="text-xs text-gray-500 mb-1 block">Precio (₡ c/u)</label>
                         <input type="number" min="0" step="50"
                           className="input w-full text-sm py-1.5 text-brand-400 font-semibold"
                           value={item.precio_unitario}
                           onChange={e => cambiarPrecioInsumo(item._key, e.target.value)}
                           onClick={e => e.stopPropagation()} />
-                        <p className="text-xs text-gray-600 mt-0.5">Costo: {formatMoney(item.costo_unitario)}/u</p>
                       </div>
                     )}
                     <div className="flex items-center justify-between">

@@ -248,7 +248,7 @@ function CategoriasModal({ onClose }) {
 function InsumoModal({ insumo, categorias, proveedores, onClose, onSave }) {
   const [form, setForm] = useState(insumo || {
     nombre: '', categoria_id: categorias[0]?.id || '', proveedor_id: '', unidad: 'tallo',
-    stock_actual: 0, stock_minimo: 10, costo_unitario: 0, precio_venta: '', vida_util_dias: '', codigo: ''
+    stock_actual: 0, stock_minimo: 10, costo_unitario: 0, vida_util_dias: '', codigo: ''
   });
 
   const [imagenPreview, setImagenPreview] = useState(getImgUrl(insumo?.imagen_url));
@@ -374,19 +374,15 @@ function InsumoModal({ insumo, categorias, proveedores, onClose, onSave }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Costo unitario (₡)</label>
-              <input className="input" type="number" step="1" value={form.costo_unitario} onChange={e => setForm(p => ({ ...p, costo_unitario: e.target.value }))} />
+              <label className="label">Precio (₡)</label>
+              <input className="input" type="number" step="1" value={form.costo_unitario}
+                onChange={e => setForm(p => ({ ...p, costo_unitario: e.target.value }))} />
             </div>
             <div>
-              <label className="label">Precio de venta (₡)</label>
-              <input className="input" type="number" step="1" placeholder="Precio al público"
-                value={form.precio_venta || ''}
-                onChange={e => setForm(p => ({ ...p, precio_venta: e.target.value }))} />
+              <label className="label">Vida útil (días)</label>
+              <input className="input" type="number" placeholder="Solo flores" value={form.vida_util_dias}
+                onChange={e => setForm(p => ({ ...p, vida_util_dias: e.target.value }))} />
             </div>
-          </div>
-          <div>
-            <label className="label">Vida útil (días)</label>
-            <input className="input" type="number" placeholder="Solo flores" value={form.vida_util_dias} onChange={e => setForm(p => ({ ...p, vida_util_dias: e.target.value }))} />
           </div>
           <div>
             <label className="label">Proveedor</label>
@@ -543,7 +539,7 @@ export default function InsumosPage() {
                 <th className="th">Insumo</th>
                 <th className="th">Categoría</th>
                 <th className="th">Stock</th>
-                <th className="th">Costo Unit.</th>
+                <th className="th">Precio</th>
                 <th className="th">Vida Útil</th>
                 <th className="th">Proveedor</th>
                 <th className="th">Acciones</th>
