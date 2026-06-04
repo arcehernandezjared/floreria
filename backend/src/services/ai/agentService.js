@@ -205,7 +205,7 @@ async function consultarInventario({ tipo = 'todos', nombre }) {
                  ELSE 'ok' END as estado_stock
      FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id
      WHERE i.activo = 1 AND ${where}
-     ORDER BY ci.tipo, i.nombre LIMIT 20`,
+     ORDER BY ci.tipo, i.nombre LIMIT 150`,
     params
   );
 
@@ -241,10 +241,20 @@ async function buscarArreglo({ nombre }) {
 }
 
 async function registrarMerma({ nombre_insumo, cantidad, motivo, notas }) {
-  const insumo = await queryOne(
+  let insumo = await queryOne(
     'SELECT i.*, ci.tipo FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id WHERE i.nombre LIKE ? AND i.activo = 1 LIMIT 1',
     [`%${nombre_insumo}%`]
   );
+  if (!insumo) {
+    const palabras = nombre_insumo.split(/\s+/).filter(p => p.length > 2);
+    for (const palabra of palabras) {
+      insumo = await queryOne(
+        'SELECT i.*, ci.tipo FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id WHERE i.nombre LIKE ? AND i.activo = 1 LIMIT 1',
+        [`%${palabra}%`]
+      );
+      if (insumo) break;
+    }
+  }
   if (!insumo) return { exito: false, mensaje: `No encontré el insumo "${nombre_insumo}". ¿Cómo se llama exactamente en el sistema?` };
   if (parseFloat(insumo.stock_actual) < cantidad) {
     return { exito: false, mensaje: `Stock insuficiente. Solo hay ${insumo.stock_actual} ${insumo.unidad} de ${insumo.nombre}.` };
@@ -454,10 +464,21 @@ async function registrarVentaPersonalizada({ ingredientes, precio_venta, nombre_
   const noEncontrados = [];
 
   for (const ing of ingredientes) {
-    const insumo = await queryOne(
+    // Búsqueda: primero nombre completo, luego palabra por palabra
+    let insumo = await queryOne(
       'SELECT * FROM insumos WHERE nombre LIKE ? AND activo = 1 LIMIT 1',
       [`%${ing.nombre_insumo}%`]
     );
+    if (!insumo) {
+      const palabras = ing.nombre_insumo.split(/\s+/).filter(p => p.length > 2);
+      for (const palabra of palabras) {
+        insumo = await queryOne(
+          'SELECT * FROM insumos WHERE nombre LIKE ? AND activo = 1 LIMIT 1',
+          [`%${palabra}%`]
+        );
+        if (insumo) break;
+      }
+    }
     if (!insumo) {
       noEncontrados.push(ing.nombre_insumo);
     } else if (parseFloat(insumo.stock_actual) < ing.cantidad) {
@@ -565,9 +586,10 @@ CAPACIDADES — QUÉ PUEDES HACER
 ═══════════════════════════════
 
 📦 INVENTARIO
-- Ver stock de flores y materiales
+- Ver stock de flores, materiales, empaques y otros insumos
+- El inventario incluye: flores (rosas, gerberas, lirios, etc.), materiales (papel pelón, papel coreano, cinta, sticker, etc.) y empaques
 - Detectar qué está agotado o bajo
-- Buscar un insumo específico
+- Buscar un insumo específico — si no lo encontrás a la primera, intentá buscar por parte del nombre
 
 🌺 CATÁLOGO Y VENTAS
 - Buscar arreglos, ver precios y márgenes
