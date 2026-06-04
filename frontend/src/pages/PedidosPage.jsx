@@ -214,8 +214,9 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
   } : { ...EMPTY_FORM });
 
   const [items, setItems] = useState(pedido?.items || []);
+  // null = modo automático (usa totalItems); '' o string = valor manual del usuario
   const [precioOverride, setPrecioOverride] = useState(
-    pedido?.precio != null ? String(parseFloat(pedido.precio) || '') : ''
+    pedido?.precio != null ? String(parseFloat(pedido.precio) || '') : null
   );
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -274,7 +275,7 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
   const quitarItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
 
   const totalItems  = items.reduce((s, i) => s + parseFloat(i.subtotal || 0), 0);
-  const precioFinal = precioOverride !== '' ? parseFloat(precioOverride) || 0 : totalItems;
+  const precioFinal = precioOverride !== null ? parseFloat(precioOverride) || 0 : totalItems;
   const adelantoNum = parseFloat(form.adelanto) || 0;
   const saldo       = precioFinal - adelantoNum;
 
@@ -483,13 +484,13 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
                   <input
                     type="number" min="0" step="1" inputMode="numeric"
                     className="input font-bold text-white tabular-nums pr-14"
-                    value={precioOverride !== '' ? precioOverride : totalItems}
+                    value={precioOverride !== null ? precioOverride : totalItems}
                     onChange={e => setPrecioOverride(e.target.value)}
                   />
-                  {precioOverride !== '' && (
+                  {precioOverride !== null && (
                     <button
                       type="button"
-                      onClick={() => setPrecioOverride('')}
+                      onClick={() => setPrecioOverride(null)}
                       title="Restaurar total calculado"
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-600/20 text-brand-400 hover:bg-brand-600/40 transition-colors"
                     >
@@ -497,7 +498,7 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
                     </button>
                   )}
                 </div>
-                {precioOverride !== '' && totalItems > 0 && parseFloat(precioOverride) !== totalItems && (
+                {precioOverride !== null && totalItems > 0 && parseFloat(precioOverride) !== totalItems && (
                   <p className="text-[11px] text-gray-500 mt-1">Calculado: {formatMoney(totalItems)}</p>
                 )}
               </div>

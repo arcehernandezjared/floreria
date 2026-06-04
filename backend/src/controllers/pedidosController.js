@@ -92,8 +92,8 @@ async function createPedido(req, res) {
     if (!fecha) return res.status(400).json({ success: false, message: 'La fecha es requerida' });
 
     const numero = await generarNumero();
-    const precio = items.reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.precio_unitario), 0)
-                   || parseFloat(req.body.precio) || 0;
+    const itemsSum = items.reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.precio_unitario), 0);
+    const precio = req.body.precio != null ? parseFloat(req.body.precio) || itemsSum : itemsSum;
 
     const result = await query(
       `INSERT INTO pedidos (numero, fecha, cliente_nombre, cliente_telefono, hora_entrega,
@@ -126,8 +126,8 @@ async function updatePedido(req, res) {
       items = []
     } = req.body;
 
-    const precio = items.reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.precio_unitario), 0)
-                   || parseFloat(req.body.precio) || 0;
+    const itemsSum = items.reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.precio_unitario), 0);
+    const precio = req.body.precio != null ? parseFloat(req.body.precio) || itemsSum : itemsSum;
 
     await query(
       `UPDATE pedidos SET fecha=?, cliente_nombre=?, cliente_telefono=?, hora_entrega=?,
