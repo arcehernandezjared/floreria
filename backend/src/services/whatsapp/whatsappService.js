@@ -17,6 +17,33 @@ let pendingPhoneNumber = null;
 let socketGen = 0;
 let onConnectedCb = null;
 
+// ── Cola por usuario (evita condiciones de carrera) ───────────────────────────
+const userQueues = new Map();
+
+// ── Rate limiter: máx 20 msgs/min por número ─────────────────────────────────
+const rateLimits  = new Map();
+const RATE_MAX    = 20;
+const RATE_WINDOW = 60_000;
+
+function checkRateLimit(numero) {
+  const now   = Date.now();
+  const entry = rateLimits.get(numero);
+  if (!entry || now - entry.since > RATE_WINDOW) {
+    rateLimits.set(numero, { count: 1, since: now });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_MAX;
+}
+
+// Limpia entradas vencidas cada 5 minutos
+setInterval(() => {
+  const cutoff = Date.now() - RATE_WINDOW;
+  for (const [num, r] of rateLimits) {
+    if (r.since < cutoff) rateLimits.delete(num);
+  }
+}, 5 * 60_000).unref();
+
 function setConnectedCallback(cb) { onConnectedCb = cb; }
 
 const AUTH_PATH = path.join(__dirname, '../../../whatsapp-auth-floreria');
@@ -175,24 +202,49 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
     sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
       if (socketGen !== myGen) return;
       if (type !== 'notify') return;
+
       for (const msg of msgs) {
         if (msg.key.fromMe) continue;
-        if (msg.key.remoteJid?.includes('@g.us')) continue;
-        const numero = msg.key.remoteJid?.replace('@s.whatsapp.net', '');
+
+        const jid = msg.key.remoteJid || '';
+        // Ignorar grupos, broadcasts, newsletters y mensajes de servidor
+        if (!jid ||
+            jid.includes('@g.us') ||
+            jid.includes('@broadcast') ||
+            jid.includes('@newsletter') ||
+            jid.includes('@lid')) continue;
+
+        const numero = jid.replace('@s.whatsapp.net', '');
         if (!numero) continue;
 
-        // Texto normal
-        const texto =
-          msg.message?.conversation ||
-          msg.message?.extendedTextMessage?.text ||
-          msg.message?.buttonsResponseMessage?.selectedDisplayText;
-
-        if (texto?.trim()) {
-          handleMessage(numero, texto.trim()).catch(e => logger.error(`handleMessage: ${e.message}`));
+        // Rate limiting
+        if (checkRateLimit(numero)) {
+          logger.warn(`Rate limit alcanzado: ${numero} — mensaje ignorado`);
           continue;
         }
 
-        // Audio / nota de voz (PTT y archivos de audio)
+        // Texto normal o extendido
+        const texto =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text ||
+          msg.message?.buttonsResponseMessage?.selectedDisplayText ||
+          msg.message?.listResponseMessage?.title;
+
+        if (texto?.trim()) {
+          handleMessage(numero, texto.trim());
+          continue;
+        }
+
+        // Imagen o video con caption (descripción de venta con foto)
+        const caption =
+          msg.message?.imageMessage?.caption ||
+          msg.message?.videoMessage?.caption;
+        if (caption?.trim()) {
+          handleMessage(numero, caption.trim());
+          continue;
+        }
+
+        // Audio / nota de voz
         const audioMsg = msg.message?.audioMessage || msg.message?.pttMessage;
         if (audioMsg) {
           const mimeType = audioMsg.mimetype || 'audio/ogg; codecs=opus';
@@ -211,15 +263,30 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
 
             const transcripcion = await transcribeAudio(buffer, mimeType);
             if (transcripcion) {
-              handleMessage(numero, transcripcion).catch(e => logger.error(`handleMessage audio: ${e.message}`));
+              handleMessage(numero, `[Audio]: ${transcripcion}`);
             } else {
               await sendMessage(numero, '⚠️ No pude entender el audio. ¿Podés escribirme el mensaje?');
             }
           } catch (e) {
-            logger.error(`Audio error: ${e.message}`);
+            logger.error(`Audio error [${numero}]: ${e.message}`);
             await sendMessage(numero, '⚠️ Hubo un error con tu audio. ¿Podés escribirlo?');
           }
           continue;
+        }
+
+        // Otros tipos de mensaje (imagen sin caption, documento, sticker, ubicación, contacto)
+        const tipoArchivo =
+          msg.message?.imageMessage    ? 'imagen'    :
+          msg.message?.videoMessage    ? 'video'     :
+          msg.message?.documentMessage ? 'documento' :
+          msg.message?.stickerMessage  ? 'sticker'   :
+          msg.message?.locationMessage ? 'ubicación' :
+          msg.message?.contactMessage  ? 'contacto'  : null;
+
+        if (tipoArchivo) {
+          await sendMessage(numero,
+            `Solo puedo procesar mensajes de texto y audios. El ${tipoArchivo} que enviaste no lo puedo interpretar. ¿Podés escribirme lo que necesitás?`
+          );
         }
       }
     });
@@ -231,45 +298,86 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
   }
 }
 
-async function handleMessage(numero, texto) {
-  logger.info(`📩 WA [${numero}]: ${texto.substring(0, 80)}`);
-
-  let conversacion = await queryOne(
-    'SELECT * FROM wa_conversaciones WHERE numero_wa = ?',
-    [numero]
-  );
-
-  let historial = [];
-  try { historial = conversacion?.mensajes ? JSON.parse(conversacion.mensajes) : []; } catch {}
-
-  const respuesta = await processMessage(texto, historial);
-
-  historial.push({ role: 'user', content: texto });
-  historial.push({ role: 'assistant', content: respuesta });
-  if (historial.length > 20) historial = historial.slice(-20);
-
-  if (conversacion) {
-    await query('UPDATE wa_conversaciones SET mensajes=?, ultimo_mensaje=NOW() WHERE id=?',
-      [JSON.stringify(historial), conversacion.id]);
-  } else {
-    await query('INSERT INTO wa_conversaciones (numero_wa, mensajes, ultimo_mensaje) VALUES (?,?,NOW())',
-      [numero, JSON.stringify(historial)]);
-  }
-
-  await sendMessage(numero, respuesta);
-  await query('INSERT INTO activity_logs (accion, descripcion) VALUES (?,?)',
-    ['wa_mensaje', `${numero}: ${texto.substring(0, 80)}`]);
-  if (ioInstance) ioInstance.emit('wa_mensaje', { numero, texto, respuesta, timestamp: new Date() });
+// ── Cola de mensajes por usuario ──────────────────────────────────────────────
+function handleMessage(numero, texto) {
+  const prev = userQueues.get(numero) ?? Promise.resolve();
+  const job  = prev
+    .catch(() => {}) // el fallo anterior no bloquea el siguiente mensaje
+    .then(() => _processMessage(numero, texto));
+  userQueues.set(numero, job);
+  job.finally(() => {
+    if (userQueues.get(numero) === job) userQueues.delete(numero);
+  });
 }
 
-async function sendMessage(numero, mensaje) {
-  if (!sock || connectionStatus !== 'connected') return false;
+async function _processMessage(numero, texto) {
+  const jid = `${numero}@s.whatsapp.net`;
+  logger.info(`📩 WA [${numero}]: ${texto.substring(0, 100)}`);
+
+  // Indicador de "escribiendo..."
   try {
-    const jid = numero.includes('@') ? numero : `${numero}@s.whatsapp.net`;
+    if (sock && connectionStatus === 'connected') {
+      await sock.sendPresenceUpdate('composing', jid);
+    }
+  } catch {}
+
+  try {
+    let conversacion = await queryOne(
+      'SELECT * FROM wa_conversaciones WHERE numero_wa = ?',
+      [numero]
+    );
+
+    let historial = [];
+    try { historial = conversacion?.mensajes ? JSON.parse(conversacion.mensajes) : []; } catch {}
+
+    const respuesta = await processMessage(texto, historial);
+
+    historial.push({ role: 'user', content: texto });
+    historial.push({ role: 'assistant', content: respuesta });
+    if (historial.length > 20) historial = historial.slice(-20);
+
+    if (conversacion) {
+      await query('UPDATE wa_conversaciones SET mensajes=?, ultimo_mensaje=NOW() WHERE id=?',
+        [JSON.stringify(historial), conversacion.id]);
+    } else {
+      await query('INSERT INTO wa_conversaciones (numero_wa, mensajes, ultimo_mensaje) VALUES (?,?,NOW())',
+        [numero, JSON.stringify(historial)]);
+    }
+
+    await sendMessage(numero, respuesta);
+
+    // Log de actividad — no crítico, no bloquea si falla
+    query('INSERT INTO activity_logs (accion, descripcion) VALUES (?,?)',
+      ['wa_mensaje', `${numero}: ${texto.substring(0, 80)}`]).catch(() => {});
+
+    if (ioInstance) ioInstance.emit('wa_mensaje', { numero, texto, respuesta, timestamp: new Date() });
+
+  } catch (error) {
+    logger.error(`_processMessage error [${numero}]: ${error.message}`);
+    await sendMessage(numero,
+      '⚠️ Ocurrió un error procesando tu mensaje. Por favor intentá de nuevo en un momento.'
+    );
+  } finally {
+    try {
+      if (sock && connectionStatus === 'connected') {
+        await sock.sendPresenceUpdate('paused', jid);
+      }
+    } catch {}
+  }
+}
+
+async function sendMessage(numero, mensaje, retries = 1) {
+  if (!sock || connectionStatus !== 'connected') return false;
+  const jid = numero.includes('@') ? numero : `${numero}@s.whatsapp.net`;
+  try {
     await sock.sendMessage(jid, { text: mensaje });
     return true;
   } catch (e) {
-    logger.error(`sendMessage error: ${e.message}`);
+    logger.error(`sendMessage error [${numero}]: ${e.message}`);
+    if (retries > 0) {
+      await new Promise(r => setTimeout(r, 1500));
+      return sendMessage(numero, mensaje, retries - 1);
+    }
     return false;
   }
 }

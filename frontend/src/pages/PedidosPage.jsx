@@ -401,13 +401,25 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
                           </div>
                         </td>
                         <td className="td">
-                          <input type="number" min="1" step="1"
-                            className="input w-16 text-sm text-center py-1 mx-auto block"
-                            value={item.cantidad}
-                            onChange={e => cambiarCantidad(idx, e.target.value)} />
+                          <div className="flex items-center justify-center gap-1">
+                            <button type="button"
+                              onClick={() => cambiarCantidad(idx, item.cantidad - 1)}
+                              className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center text-base font-bold flex-shrink-0 touch-manipulation select-none">
+                              −
+                            </button>
+                            <input type="number" min="1" step="1" inputMode="numeric"
+                              className="input w-12 text-sm text-center py-1"
+                              value={item.cantidad}
+                              onChange={e => cambiarCantidad(idx, e.target.value)} />
+                            <button type="button"
+                              onClick={() => cambiarCantidad(idx, item.cantidad + 1)}
+                              className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center text-base font-bold flex-shrink-0 touch-manipulation select-none">
+                              +
+                            </button>
+                          </div>
                         </td>
                         <td className="td text-right">
-                          <input type="number" min="0" step="100"
+                          <input type="number" min="0" step="1" inputMode="numeric"
                             className="input w-24 text-sm text-right py-1 ml-auto block"
                             value={item.precio_unitario}
                             onChange={e => cambiarPrecio(idx, e.target.value)} />
@@ -467,7 +479,7 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
               </div>
               <div>
                 <label className="label">Adelanto ₡</label>
-                <input type="number" min="0" step="100" className="input"
+                <input type="number" min="0" step="1" inputMode="numeric" className="input"
                   placeholder="0" value={form.adelanto}
                   onChange={e => set('adelanto', e.target.value)} />
               </div>

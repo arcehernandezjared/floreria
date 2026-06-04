@@ -768,36 +768,78 @@ Cuatro tipos: Ventas, Inventario, Mermas, Financiero. Períodos: este mes, mes a
 Obligatorio si hubo ventas ese día (si no lo hacés, el sistema bloquea la app al día siguiente hasta completarlo). Registra ventas, gastos, mermas, costos y utilidad del día. Al hacerlo, se aparta automáticamente el % configurado para el fondo de sueldos. Podés ingresar cuánto hay en caja y el sistema muestra la diferencia. Historial filtrable por mes o rango de fechas. Si un día no tuvo ventas, el cierre es opcional.`;
 }
 
+// ── Constantes de resiliencia ─────────────────────────────────────────────────
+const TOOL_TIMEOUT_MS  = 30_000;
+const MAX_INPUT_LENGTH = 3_000;
+const MAX_TOOL_CYCLES  = 10;
+
+async function executeToolSafe(name, input) {
+  return Promise.race([
+    executeTool(name, input),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`La herramienta "${name}" no respondió a tiempo`)), TOOL_TIMEOUT_MS)
+    )
+  ]);
+}
+
+function classifyApiError(error) {
+  const status = error.status || error.statusCode;
+  if (status === 429) return '⚠️ Demasiadas consultas al mismo tiempo. Esperá 30 segundos e intentá de nuevo.';
+  if (status === 529) return '⚠️ El servicio de IA está temporalmente sobrecargado. Intentá en 1-2 minutos.';
+  if (status === 401 || status === 403) return '⚠️ Error de configuración del servicio. Avisale al administrador del sistema.';
+  if (status >= 500 || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT')
+    return '⚠️ Error temporal de conexión. Intentá de nuevo en un momento.';
+  return null;
+}
+
 // ── Procesar mensaje ──────────────────────────────────────────────────────────
 async function processMessage(mensaje, historial = []) {
+  const textoLimpio = typeof mensaje === 'string' && mensaje.length > MAX_INPUT_LENGTH
+    ? mensaje.substring(0, MAX_INPUT_LENGTH) + '... [mensaje truncado]'
+    : mensaje;
+
   try {
     const messages = [
       ...historial.slice(-8).filter(m => m?.content?.trim()),
-      { role: 'user', content: mensaje }
+      { role: 'user', content: textoLimpio }
     ];
 
     let response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: buildSystemPrompt(),
       tools: TOOLS,
       messages
     });
 
-    // Agotar ciclos de herramientas
-    while (response.stop_reason === 'tool_use') {
-      const toolUses = response.content.filter(b => b.type === 'tool_use');
+    let cycles = 0;
+    while (response.stop_reason === 'tool_use' && cycles < MAX_TOOL_CYCLES) {
+      cycles++;
+      const toolUses   = response.content.filter(b => b.type === 'tool_use');
       const toolResults = [];
+
       for (const toolUse of toolUses) {
-        logger.info(`WA tool: ${toolUse.name} ${JSON.stringify(toolUse.input)}`);
-        const result = await executeTool(toolUse.name, toolUse.input);
-        toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: JSON.stringify(result) });
+        logger.info(`WA tool [${cycles}]: ${toolUse.name} ${JSON.stringify(toolUse.input)}`);
+        try {
+          const result = await executeToolSafe(toolUse.name, toolUse.input);
+          toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: JSON.stringify(result) });
+        } catch (toolError) {
+          logger.error(`Tool error [${toolUse.name}]: ${toolError.message}`);
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: JSON.stringify({ error: toolError.message }),
+            is_error: true
+          });
+        }
       }
+
       messages.push({ role: 'assistant', content: response.content });
       messages.push({ role: 'user', content: toolResults });
+
       response = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: buildSystemPrompt(),
         tools: TOOLS,
         messages
@@ -805,11 +847,11 @@ async function processMessage(mensaje, historial = []) {
     }
 
     const text = response.content.find(b => b.type === 'text');
-    return text?.text || 'No pude procesar tu solicitud.';
+    return text?.text?.trim() || 'No pude generar una respuesta. Intentá de nuevo.';
+
   } catch (error) {
     logger.error(`agentService error: ${error.message}`);
-    if (error.message?.includes('API')) return '⚠️ Error temporal con la IA. Intentá de nuevo en un momento.';
-    return `Error: ${error.message}`;
+    return classifyApiError(error) || '⚠️ No pude procesar tu solicitud. Intentá de nuevo o escribilo de otra forma.';
   }
 }
 
