@@ -220,17 +220,19 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
           continue;
         }
 
-        // Ignorar grupos, broadcasts, newsletters y mensajes de servidor
+        // Ignorar grupos, broadcasts y newsletters
         if (!jid ||
             jid.includes('@g.us') ||
             jid.includes('@broadcast') ||
-            jid.includes('@newsletter') ||
-            jid.includes('@lid')) {
+            jid.includes('@newsletter')) {
           logger.info(`⏭️ Ignorado (jid especial) — jid: ${jid}`);
           continue;
         }
 
-        const numero = jid.replace('@s.whatsapp.net', '');
+        // Extraer número — para @lid usar el JID completo como identificador único
+        const numero = jid.includes('@lid')
+          ? jid
+          : jid.replace('@s.whatsapp.net', '');
         if (!numero) continue;
 
         // Rate limiting
