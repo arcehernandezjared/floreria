@@ -147,6 +147,14 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
         pendingPhoneNumber = null;
         emitStatus('connected');
         logger.info('✅ WhatsApp conectado');
+        // Garantizar que la tabla de conversaciones existe
+        query(`CREATE TABLE IF NOT EXISTS wa_conversaciones (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          numero_wa VARCHAR(30) NOT NULL UNIQUE,
+          mensajes LONGTEXT,
+          ultimo_mensaje DATETIME,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`).catch(e => logger.error(`ensureWaTable: ${e.message}`));
         if (onConnectedCb) onConnectedCb();
         return;
       }
@@ -204,15 +212,23 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
       if (type !== 'notify') return;
 
       for (const msg of msgs) {
-        if (msg.key.fromMe) continue;
-
         const jid = msg.key.remoteJid || '';
+        logger.info(`📨 Mensaje entrante — jid: ${jid} | fromMe: ${msg.key.fromMe} | type: ${type}`);
+
+        if (msg.key.fromMe) {
+          logger.info(`⏭️ Ignorado (fromMe) — jid: ${jid}`);
+          continue;
+        }
+
         // Ignorar grupos, broadcasts, newsletters y mensajes de servidor
         if (!jid ||
             jid.includes('@g.us') ||
             jid.includes('@broadcast') ||
             jid.includes('@newsletter') ||
-            jid.includes('@lid')) continue;
+            jid.includes('@lid')) {
+          logger.info(`⏭️ Ignorado (jid especial) — jid: ${jid}`);
+          continue;
+        }
 
         const numero = jid.replace('@s.whatsapp.net', '');
         if (!numero) continue;
