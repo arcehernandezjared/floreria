@@ -239,12 +239,33 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
           continue;
         }
 
-        // Texto normal o extendido
+        // Ignorar mensajes de protocolo (delivery receipts, reacciones, etc.)
+        const msgKeys = Object.keys(msg.message || {});
+        if (!msg.message || msgKeys.includes('protocolMessage') ||
+            msgKeys.includes('reactionMessage') ||
+            msgKeys.includes('senderKeyDistributionMessage')) {
+          logger.info(`⏭️ Ignorado (protocolo) — keys: ${msgKeys.join(',')}`);
+          continue;
+        }
+
+        // Desempaquetar wrappers comunes de Baileys
+        // (ephemeral, viewOnce, historySyncMsg llegan envueltos)
+        const inner =
+          msg.message?.ephemeralMessage?.message ||
+          msg.message?.viewOnceMessage?.message ||
+          msg.message?.viewOnceMessageV2?.message?.viewOnceMessage?.message ||
+          msg.message?.documentWithCaptionMessage?.message ||
+          msg.message;
+
+        // Extraer texto del mensaje desempaquetado
         const texto =
-          msg.message?.conversation ||
-          msg.message?.extendedTextMessage?.text ||
-          msg.message?.buttonsResponseMessage?.selectedDisplayText ||
-          msg.message?.listResponseMessage?.title;
+          inner?.conversation ||
+          inner?.extendedTextMessage?.text ||
+          inner?.buttonsResponseMessage?.selectedDisplayText ||
+          inner?.listResponseMessage?.title ||
+          inner?.templateButtonReplyMessage?.selectedDisplayText;
+
+        logger.info(`📝 [${numero}] keys: ${msgKeys.join(',')} | texto: "${texto ? texto.substring(0, 60) : 'vacío'}"`);
 
         if (texto?.trim()) {
           handleMessage(numero, texto.trim());
@@ -252,16 +273,14 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
         }
 
         // Imagen o video con caption (descripción de venta con foto)
-        const caption =
-          msg.message?.imageMessage?.caption ||
-          msg.message?.videoMessage?.caption;
+        const caption = inner?.imageMessage?.caption || inner?.videoMessage?.caption;
         if (caption?.trim()) {
           handleMessage(numero, caption.trim());
           continue;
         }
 
         // Audio / nota de voz
-        const audioMsg = msg.message?.audioMessage || msg.message?.pttMessage;
+        const audioMsg = inner?.audioMessage || inner?.pttMessage;
         if (audioMsg) {
           const mimeType = audioMsg.mimetype || 'audio/ogg; codecs=opus';
           logger.info(`🎤 Audio de ${numero} (mime: ${mimeType})`);
@@ -290,14 +309,14 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
           continue;
         }
 
-        // Otros tipos de mensaje (imagen sin caption, documento, sticker, ubicación, contacto)
+        // Otros tipos (imagen sin caption, documento, sticker, ubicación, contacto)
         const tipoArchivo =
-          msg.message?.imageMessage    ? 'imagen'    :
-          msg.message?.videoMessage    ? 'video'     :
-          msg.message?.documentMessage ? 'documento' :
-          msg.message?.stickerMessage  ? 'sticker'   :
-          msg.message?.locationMessage ? 'ubicación' :
-          msg.message?.contactMessage  ? 'contacto'  : null;
+          inner?.imageMessage    ? 'imagen'    :
+          inner?.videoMessage    ? 'video'     :
+          inner?.documentMessage ? 'documento' :
+          inner?.stickerMessage  ? 'sticker'   :
+          inner?.locationMessage ? 'ubicación' :
+          inner?.contactMessage  ? 'contacto'  : null;
 
         if (tipoArchivo) {
           await sendMessage(numero,
