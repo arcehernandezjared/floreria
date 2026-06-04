@@ -190,32 +190,87 @@ async function executeTool(name, input) {
 
 // ── Implementaciones ──────────────────────────────────────────────────────────
 
-async function consultarInventario({ tipo = 'todos', nombre }) {
-  let where = '1=1';
-  const params = [];
-  if (tipo === 'flores')      { where += ' AND ci.tipo = "flor"'; }
-  else if (tipo === 'materiales') { where += ' AND ci.tipo = "material"'; }
-  else if (tipo === 'stock_bajo') { where += ' AND i.stock_actual <= i.stock_minimo'; }
-  if (nombre) { where += ' AND i.nombre LIKE ?'; params.push(`%${nombre}%`); }
-
-  const insumos = await query(
-    `SELECT i.nombre, ci.tipo, i.unidad, i.stock_actual, i.stock_minimo, i.costo_unitario,
-            CASE WHEN i.stock_actual <= 0 THEN 'agotado'
-                 WHEN i.stock_actual <= i.stock_minimo THEN 'bajo'
-                 ELSE 'ok' END as estado_stock
+async function buscarInsumo(termino) {
+  // Búsqueda flexible: nombre completo → luego cada palabra
+  let rows = await query(
+    `SELECT i.id, i.nombre, ci.tipo, ci.nombre as categoria, i.unidad, i.stock_actual, i.stock_minimo, i.costo_unitario
      FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id
-     WHERE i.activo = 1 AND ${where}
-     ORDER BY ci.tipo, i.nombre LIMIT 150`,
-    params
+     WHERE i.activo = 1 AND i.nombre LIKE ? LIMIT 5`,
+    [`%${termino}%`]
   );
+  if (!rows.length) {
+    const palabras = termino.split(/\s+/).filter(p => p.length > 2);
+    for (const p of palabras) {
+      rows = await query(
+        `SELECT i.id, i.nombre, ci.tipo, ci.nombre as categoria, i.unidad, i.stock_actual, i.stock_minimo, i.costo_unitario
+         FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id
+         WHERE i.activo = 1 AND i.nombre LIKE ? LIMIT 5`,
+        [`%${p}%`]
+      );
+      if (rows.length) break;
+    }
+  }
+  return rows;
+}
 
-  if (!insumos.length) return { mensaje: 'No se encontraron insumos con esos criterios.' };
+async function consultarInventario({ tipo = 'todos', nombre }) {
+  // Búsqueda por nombre específico
+  if (nombre) {
+    const rows = await buscarInsumo(nombre);
+    if (!rows.length) return { mensaje: `No encontré "${nombre}" en el inventario.` };
+    const resumen = rows.map(i =>
+      `• ${i.nombre} (${i.categoria}): ${i.stock_actual} ${i.unidad} ${parseFloat(i.stock_actual) <= 0 ? '🔴 AGOTADO' : parseFloat(i.stock_actual) <= i.stock_minimo ? '⚠️ bajo' : '✅'}`
+    ).join('\n');
+    return { encontrados: rows.length, insumos: rows, resumen };
+  }
 
-  const resumen = insumos.map(i =>
-    `• ${i.nombre}: ${i.stock_actual} ${i.unidad} (${i.estado_stock === 'ok' ? '✅' : i.estado_stock === 'bajo' ? '⚠️' : '🔴'})`
+  // Stock bajo / agotado
+  if (tipo === 'stock_bajo') {
+    const rows = await query(
+      `SELECT i.nombre, ci.nombre as categoria, i.unidad, i.stock_actual, i.stock_minimo
+       FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id
+       WHERE i.activo = 1 AND i.stock_actual <= i.stock_minimo ORDER BY i.stock_actual ASC LIMIT 30`,
+      []
+    );
+    if (!rows.length) return { mensaje: '✅ Todo el inventario está bien abastecido.' };
+    return { total: rows.length, resumen: rows.map(i => `• ${i.nombre}: ${i.stock_actual}/${i.stock_minimo} ${i.unidad}`).join('\n') };
+  }
+
+  // Flores o materiales — lista filtrada
+  if (tipo === 'flores' || tipo === 'materiales') {
+    const tipoFiltro = tipo === 'flores' ? '"flor"' : '"material","empaque","otro"';
+    const rows = await query(
+      `SELECT i.nombre, ci.nombre as categoria, i.unidad, i.stock_actual, i.stock_minimo
+       FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id
+       WHERE i.activo = 1 AND ci.tipo IN (${tipoFiltro}) ORDER BY i.nombre LIMIT 80`,
+      []
+    );
+    const resumen = rows.map(i =>
+      `• ${i.nombre}: ${i.stock_actual} ${i.unidad} ${parseFloat(i.stock_actual) <= 0 ? '🔴' : parseFloat(i.stock_actual) <= i.stock_minimo ? '⚠️' : '✅'}`
+    ).join('\n');
+    return { total: rows.length, resumen };
+  }
+
+  // Vista general — resumen por categoría (no lista 321 items)
+  const cats = await query(
+    `SELECT ci.nombre as categoria, ci.tipo, COUNT(*) as total,
+            SUM(CASE WHEN i.stock_actual <= 0 THEN 1 ELSE 0 END) as agotados,
+            SUM(CASE WHEN i.stock_actual > 0 AND i.stock_actual <= i.stock_minimo THEN 1 ELSE 0 END) as bajos
+     FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id
+     WHERE i.activo = 1 GROUP BY ci.id ORDER BY ci.tipo, ci.nombre`,
+    []
+  );
+  const agotados = await query(
+    `SELECT i.nombre FROM insumos i WHERE i.activo = 1 AND i.stock_actual <= 0 LIMIT 15`, []
+  );
+  const totalItems = cats.reduce((s, c) => s + c.total, 0);
+  const resumenCats = cats.map(c =>
+    `• ${c.categoria} (${c.tipo}): ${c.total} items${c.agotados > 0 ? ` — 🔴 ${c.agotados} agotados` : ''}${c.bajos > 0 ? ` — ⚠️ ${c.bajos} bajos` : ' ✅'}`
   ).join('\n');
-
-  return { total: insumos.length, insumos, resumen };
+  return {
+    total: totalItems,
+    resumen: `📦 *Inventario* — ${totalItems} insumos en ${cats.length} categorías\n\n${resumenCats}${agotados.length ? `\n\n🔴 Agotados: ${agotados.map(i => i.nombre).join(', ')}` : ''}`
+  };
 }
 
 async function buscarArreglo({ nombre }) {
@@ -241,20 +296,8 @@ async function buscarArreglo({ nombre }) {
 }
 
 async function registrarMerma({ nombre_insumo, cantidad, motivo, notas }) {
-  let insumo = await queryOne(
-    'SELECT i.*, ci.tipo FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id WHERE i.nombre LIKE ? AND i.activo = 1 LIMIT 1',
-    [`%${nombre_insumo}%`]
-  );
-  if (!insumo) {
-    const palabras = nombre_insumo.split(/\s+/).filter(p => p.length > 2);
-    for (const palabra of palabras) {
-      insumo = await queryOne(
-        'SELECT i.*, ci.tipo FROM insumos i LEFT JOIN categorias_insumo ci ON i.categoria_id = ci.id WHERE i.nombre LIKE ? AND i.activo = 1 LIMIT 1',
-        [`%${palabra}%`]
-      );
-      if (insumo) break;
-    }
-  }
+  const resultados = await buscarInsumo(nombre_insumo);
+  const insumo = resultados[0] || null;
   if (!insumo) return { exito: false, mensaje: `No encontré el insumo "${nombre_insumo}". ¿Cómo se llama exactamente en el sistema?` };
   if (parseFloat(insumo.stock_actual) < cantidad) {
     return { exito: false, mensaje: `Stock insuficiente. Solo hay ${insumo.stock_actual} ${insumo.unidad} de ${insumo.nombre}.` };
@@ -464,21 +507,8 @@ async function registrarVentaPersonalizada({ ingredientes, precio_venta, nombre_
   const noEncontrados = [];
 
   for (const ing of ingredientes) {
-    // Búsqueda: primero nombre completo, luego palabra por palabra
-    let insumo = await queryOne(
-      'SELECT * FROM insumos WHERE nombre LIKE ? AND activo = 1 LIMIT 1',
-      [`%${ing.nombre_insumo}%`]
-    );
-    if (!insumo) {
-      const palabras = ing.nombre_insumo.split(/\s+/).filter(p => p.length > 2);
-      for (const palabra of palabras) {
-        insumo = await queryOne(
-          'SELECT * FROM insumos WHERE nombre LIKE ? AND activo = 1 LIMIT 1',
-          [`%${palabra}%`]
-        );
-        if (insumo) break;
-      }
-    }
+    const resultados = await buscarInsumo(ing.nombre_insumo);
+    const insumo = resultados[0] || null;
     if (!insumo) {
       noEncontrados.push(ing.nombre_insumo);
     } else if (parseFloat(insumo.stock_actual) < ing.cantidad) {
