@@ -20,6 +20,9 @@ let onConnectedCb = null;
 // ── Cola por usuario (evita condiciones de carrera) ───────────────────────────
 const userQueues = new Map();
 
+// ── Mapa LID → JID real (@s.whatsapp.net) para protocolo multi-dispositivo ───
+const lidToJidMap = new Map();
+
 // ── Rate limiter: máx 20 msgs/min por número ─────────────────────────────────
 const rateLimits  = new Map();
 const RATE_MAX    = 20;
@@ -207,6 +210,18 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
 
     sock.ev.on('creds.update', saveCreds);
 
+    // Construir mapa LID → JID real para poder responder a contactos @lid
+    sock.ev.on('contacts.upsert', contacts => {
+      for (const c of contacts) {
+        if (c.id && c.lid) lidToJidMap.set(c.lid, c.id);
+      }
+    });
+    sock.ev.on('contacts.update', updates => {
+      for (const u of updates) {
+        if (u.id && u.lid) lidToJidMap.set(u.lid, u.id);
+      }
+    });
+
     sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
       if (socketGen !== myGen) return;
       if (type !== 'notify') return;
@@ -348,15 +363,19 @@ function handleMessage(numero, texto) {
 }
 
 async function _processMessage(numero, texto) {
-  const jid = `${numero}@s.whatsapp.net`;
+  // Los JIDs @lid no aceptan sendPresenceUpdate (causa error 500 y cae la conexión)
+  const isLid = numero.includes('@lid');
+  const jid   = isLid ? numero : `${numero}@s.whatsapp.net`;
   logger.info(`📩 WA [${numero}]: ${texto.substring(0, 100)}`);
 
-  // Indicador de "escribiendo..."
-  try {
-    if (sock && connectionStatus === 'connected') {
-      await sock.sendPresenceUpdate('composing', jid);
-    }
-  } catch {}
+  // Indicador de "escribiendo..." (solo para JIDs normales)
+  if (!isLid) {
+    try {
+      if (sock && connectionStatus === 'connected') {
+        await sock.sendPresenceUpdate('composing', jid);
+      }
+    } catch {}
+  }
 
   try {
     let conversacion = await queryOne(
@@ -395,22 +414,34 @@ async function _processMessage(numero, texto) {
       '⚠️ Ocurrió un error procesando tu mensaje. Por favor intentá de nuevo en un momento.'
     );
   } finally {
-    try {
-      if (sock && connectionStatus === 'connected') {
-        await sock.sendPresenceUpdate('paused', jid);
-      }
-    } catch {}
+    if (!isLid) {
+      try {
+        if (sock && connectionStatus === 'connected') {
+          await sock.sendPresenceUpdate('paused', jid);
+        }
+      } catch {}
+    }
   }
 }
 
 async function sendMessage(numero, mensaje, retries = 1) {
   if (!sock || connectionStatus !== 'connected') return false;
-  const jid = numero.includes('@') ? numero : `${numero}@s.whatsapp.net`;
+
+  // Resolver @lid al JID real si está disponible en el mapa de contactos
+  let jid;
+  if (numero.includes('@lid')) {
+    const resolved = lidToJidMap.get(numero);
+    jid = resolved ?? numero; // usar @lid si aún no se resolvió
+    if (resolved) logger.info(`@lid resuelto: ${numero} → ${resolved}`);
+  } else {
+    jid = numero.includes('@') ? numero : `${numero}@s.whatsapp.net`;
+  }
+
   try {
     await sock.sendMessage(jid, { text: mensaje });
     return true;
   } catch (e) {
-    logger.error(`sendMessage error [${numero}]: ${e.message}`);
+    logger.error(`sendMessage error [${jid}]: ${e.message}`);
     if (retries > 0) {
       await new Promise(r => setTimeout(r, 1500));
       return sendMessage(numero, mensaje, retries - 1);
