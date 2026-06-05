@@ -91,7 +91,12 @@ async function createArreglo(req, res) {
       const catalogoId = result.insertId;
 
       if (ingredientes && ingredientes.length > 0) {
+        const ingsMap = new Map();
         for (const ing of ingredientes) {
+          if (ingsMap.has(ing.insumo_id)) ingsMap.get(ing.insumo_id).cantidad += parseFloat(ing.cantidad);
+          else ingsMap.set(ing.insumo_id, { ...ing, cantidad: parseFloat(ing.cantidad) });
+        }
+        for (const ing of ingsMap.values()) {
           await conn.query(
             'INSERT INTO ficha_ingredientes (catalogo_id, insumo_id, cantidad, notas) VALUES (?, ?, ?, ?)',
             [catalogoId, ing.insumo_id, ing.cantidad, ing.notas || null]
@@ -136,7 +141,12 @@ async function updateArreglo(req, res) {
 
       if (ingredientes !== undefined) {
         await conn.query('DELETE FROM ficha_ingredientes WHERE catalogo_id = ?', [id]);
+        const ingsMap = new Map();
         for (const ing of ingredientes) {
+          if (ingsMap.has(ing.insumo_id)) ingsMap.get(ing.insumo_id).cantidad += parseFloat(ing.cantidad);
+          else ingsMap.set(ing.insumo_id, { ...ing, cantidad: parseFloat(ing.cantidad) });
+        }
+        for (const ing of ingsMap.values()) {
           await conn.query(
             'INSERT INTO ficha_ingredientes (catalogo_id, insumo_id, cantidad, notas) VALUES (?, ?, ?, ?)',
             [id, ing.insumo_id, ing.cantidad, ing.notas || null]

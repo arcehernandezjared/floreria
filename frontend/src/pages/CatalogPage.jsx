@@ -153,15 +153,26 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
     codigo:             arreglo?.codigo          ?? '',
   });
 
-  const [ingredientes, setIngredientes] = useState(
-    arreglo?.ingredientes?.map(i => ({
-      insumo_id:      i.insumo_id,
-      nombre:         i.insumo_nombre,
-      unidad:         i.unidad,
-      costo_unitario: parseFloat(i.costo_unitario),
-      cantidad:       Math.round(parseFloat(i.cantidad)),
-    })) ?? []
-  );
+  const [ingredientes, setIngredientes] = useState(() => {
+    const raw = arreglo?.ingredientes ?? [];
+    // Fusionar entradas duplicadas (mismo insumo_id) sumando cantidades
+    const map = new Map();
+    for (const i of raw) {
+      const existing = map.get(i.insumo_id);
+      if (existing) {
+        existing.cantidad += Math.round(parseFloat(i.cantidad));
+      } else {
+        map.set(i.insumo_id, {
+          insumo_id:      i.insumo_id,
+          nombre:         i.insumo_nombre,
+          unidad:         i.unidad,
+          costo_unitario: parseFloat(i.costo_unitario),
+          cantidad:       Math.round(parseFloat(i.cantidad)),
+        });
+      }
+    }
+    return Array.from(map.values());
+  });
 
   // Imagen
   const [imagenFile,    setImagenFile]    = useState(null);   // File object
