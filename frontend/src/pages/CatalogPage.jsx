@@ -504,7 +504,7 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
                 <label className="label">Precio de venta (₡)</label>
                 <input
                   className="input text-brand-400 font-bold text-base"
-                  type="number" min="0" step="100"
+                  type="number" min="0" step="1" inputMode="numeric"
                   value={precioVenta || ''}
                   onChange={e => { setPrecioVenta(Number(e.target.value)); setPrecioManual(true); }}
                 />
