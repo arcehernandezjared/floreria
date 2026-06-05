@@ -31,11 +31,21 @@ const { startAlertScheduler } = require('./src/services/alertScheduler');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: process.env.FRONTEND_URL || 'http://localhost:5174', credentials: true }
-});
+// Acepta múltiples orígenes separados por coma en FRONTEND_URL
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5174')
+  .split(',').map(s => s.trim()).filter(Boolean);
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5174', credentials: true }));
+const corsOptions = {
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS bloqueado: ${origin}`));
+  },
+  credentials: true
+};
+
+const io = new Server(server, { cors: corsOptions });
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(require('path').join(__dirname, 'uploads')));
