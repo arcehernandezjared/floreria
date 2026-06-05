@@ -768,14 +768,33 @@ export default function CatalogPage() {
             onEditar={() => { setEditModal(fichaModal); setFichaModal(null); }}
           />
         )}
-        {editModal && (
+        {editModal && editModal === 'nuevo' && (
           <ArregloModal
-            arreglo={editModal === 'nuevo' ? null : (arregloParaEditar || editModal)}
+            key="nuevo"
+            arreglo={null}
             insumos={insumos}
             onClose={() => setEditModal(null)}
             onSave={handleSave}
             isPending={isPending}
           />
+        )}
+        {editModal && editModal !== 'nuevo' && arregloParaEditar && (
+          <ArregloModal
+            key={arregloParaEditar.id}
+            arreglo={arregloParaEditar}
+            insumos={insumos}
+            onClose={() => setEditModal(null)}
+            onSave={handleSave}
+            isPending={isPending}
+          />
+        )}
+        {editModal && editModal !== 'nuevo' && !arregloParaEditar && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+            <div className="card p-8 text-center">
+              <div className="animate-spin w-8 h-8 border-2 border-brand-400 border-t-transparent rounded-full mx-auto mb-3" />
+              <p className="text-gray-400 text-sm">Cargando arreglo...</p>
+            </div>
+          </div>
         )}
         {confirmarBorrar && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
