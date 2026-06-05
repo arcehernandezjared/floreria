@@ -111,7 +111,9 @@ async function updateInsumo(req, res) {
     const existing = await queryOne('SELECT * FROM insumos WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ success: false, message: 'Insumo no encontrado' });
 
-    if (costo_unitario !== undefined && parseFloat(costo_unitario) !== parseFloat(existing.costo_unitario)) {
+    const costoChanged = costo_unitario !== undefined && parseFloat(costo_unitario) !== parseFloat(existing.costo_unitario);
+
+    if (costoChanged) {
       await query(
         'INSERT INTO historial_costos_insumo (insumo_id, costo_anterior, costo_nuevo, notas) VALUES (?, ?, ?, ?)',
         [id, existing.costo_unitario, costo_unitario, 'Actualización manual']
@@ -129,6 +131,24 @@ async function updateInsumo(req, res) {
        imagen_url !== undefined ? (imagen_url || null) : existing.imagen_url,
        precio_venta !== undefined ? (precio_venta || null) : existing.precio_venta, id]
     );
+
+    if (costoChanged) {
+      // Recalcular costo_calculado de todos los arreglos que usan este insumo
+      await query(
+        `UPDATE catalogo c
+         SET costo_calculado = (
+           SELECT COALESCE(SUM(fi.cantidad * i.costo_unitario), 0)
+           FROM ficha_ingredientes fi
+           JOIN insumos i ON fi.insumo_id = i.id
+           WHERE fi.catalogo_id = c.id
+         )
+         WHERE c.id IN (
+           SELECT DISTINCT catalogo_id FROM ficha_ingredientes WHERE insumo_id = ?
+         )`,
+        [id]
+      );
+      logger.info(`Insumo #${id}: costo ${existing.costo_unitario} → ${costo_unitario} — costos de arreglos actualizados`);
+    }
 
     const updated = await queryOne(
       `SELECT i.*, c.nombre as categoria_nombre, p.nombre as proveedor_nombre
