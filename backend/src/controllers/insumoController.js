@@ -312,16 +312,23 @@ async function deleteCategoria(req, res) {
   try {
     const { id } = req.params;
     const inUse = await queryOne('SELECT COUNT(*) as n FROM insumos WHERE categoria_id = ?', [id]);
-    if (inUse.n > 0) {
+    if (parseInt(inUse?.n || 0) > 0) {
       return res.status(400).json({
         success: false,
-        message: `No se puede eliminar: ${inUse.n} insumo(s) usan esta categoría (incluyendo inactivos)`
+        message: `No se puede eliminar: ${inUse.n} insumo(s) usan esta categoría. Primero reasigná o eliminá esos insumos.`
       });
     }
     await query('DELETE FROM categorias_insumo WHERE id = ?', [id]);
     res.json({ success: true, message: 'Categoría eliminada' });
   } catch (error) {
     logger.error(`deleteCategoria: ${error.message}`);
+    // Error de foreign key — hay insumos que dependen de esta categoría
+    if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se puede eliminar: hay insumos que pertenecen a esta categoría. Primero reasignalos o eliminá los insumos.'
+      });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 }
