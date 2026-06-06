@@ -311,11 +311,11 @@ async function updateCategoria(req, res) {
 async function deleteCategoria(req, res) {
   try {
     const { id } = req.params;
-    const inUse = await queryOne('SELECT COUNT(*) as n FROM insumos WHERE categoria_id = ? AND activo = 1', [id]);
+    const inUse = await queryOne('SELECT COUNT(*) as n FROM insumos WHERE categoria_id = ?', [id]);
     if (inUse.n > 0) {
       return res.status(400).json({
         success: false,
-        message: `No se puede eliminar: ${inUse.n} insumo(s) activo(s) usan esta categoría`
+        message: `No se puede eliminar: ${inUse.n} insumo(s) usan esta categoría (incluyendo inactivos)`
       });
     }
     await query('DELETE FROM categorias_insumo WHERE id = ?', [id]);
