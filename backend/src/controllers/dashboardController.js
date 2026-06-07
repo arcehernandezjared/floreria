@@ -139,6 +139,7 @@ async function getDashboard(req, res) {
         termometro_nomina: termometro,
         top_mermas_semana: topMermas,
         ventas_semana: ventasSemana,
+        ventas_mes: parseFloat(ventasMes.monto),
         gastos_mes: parseFloat(gastosMes.total),
         utilidad_mes,
         pedidos_pendientes: pedidosPendientes

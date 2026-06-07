@@ -224,23 +224,23 @@ export default function DashboardPage() {
           delay={0.05}
         />
         <TarjetaGrande
-          Icon={TrendingUp}
-          titulo="Ganancia de hoy"
-          valor={formatMoney(gananciaHoy)}
-          detalle={gananciaHoy > 0 ? 'Ganancia bruta del día' : 'Aún no hay ventas registradas'}
+          Icon={DollarSign}
+          titulo="Ventas del mes"
+          valor={formatMoney(dash?.ventas_mes ?? 0)}
+          detalle={`Ingresos totales de ${new Date().toLocaleDateString('es-CR', { month: 'long' })}`}
           colorFondo="bg-blue-500/10 border-blue-500/20"
-          colorValor={gananciaHoy >= 0 ? 'text-blue-400' : 'text-red-400'}
+          colorValor="text-blue-400"
           iconBg="bg-blue-500/15" iconColor="text-blue-400"
           delay={0.1}
         />
         <TarjetaGrande
-          Icon={utilidadMes >= 0 ? TrendingUp : TrendingDown}
-          titulo="Ganancia del mes"
-          valor={formatMoney(utilidadMes)}
-          detalle={`Gastos del mes: ${formatMoney(dash?.gastos_mes)}`}
-          colorFondo={utilidadMes >= 0 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-red-500/10 border-red-500/20'}
-          colorValor={utilidadMes >= 0 ? 'text-amber-400' : 'text-red-400'}
-          iconBg={utilidadMes >= 0 ? 'bg-amber-500/15' : 'bg-red-500/15'} iconColor={utilidadMes >= 0 ? 'text-amber-400' : 'text-red-400'}
+          Icon={TrendingDown}
+          titulo="Gastos del mes"
+          valor={formatMoney(dash?.gastos_mes ?? 0)}
+          detalle={`Gastos registrados de ${new Date().toLocaleDateString('es-CR', { month: 'long' })}`}
+          colorFondo="bg-red-500/10 border-red-500/20"
+          colorValor="text-red-400"
+          iconBg="bg-red-500/15" iconColor="text-red-400"
           delay={0.15}
         />
         <TarjetaGrande
