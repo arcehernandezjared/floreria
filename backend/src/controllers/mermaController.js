@@ -73,7 +73,8 @@ async function updateMerma(req, res) {
     const { cantidad, motivo, proveedor_id, notas, costo_unitario } = req.body;
 
     const merma = await queryOne('SELECT * FROM mermas WHERE id = ?', [id]);
-    if (!merma) return res.status(404).json({ success: false, message: 'Merma no encontrada' });
+    logger.info(`updateMerma id=${id} → ${merma ? 'encontrada' : 'NO encontrada en DB'}`);
+    if (!merma) return res.status(404).json({ success: false, message: `Merma #${id} no encontrada en la base de datos` });
 
     const cantidadAnterior = parseFloat(merma.cantidad);
     const cantidadNueva    = cantidad != null ? parseFloat(cantidad) : cantidadAnterior;
