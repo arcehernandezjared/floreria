@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, Edit, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Truck, Edit, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import api, { formatMoney, formatDate } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -81,7 +81,7 @@ export default function ProveedoresPage() {
   const [modal, setModal] = useState(null);
   const [expanded, setExpanded] = useState(null);
 
-  const { data: proveedores = [] } = useQuery({ queryKey: ['proveedores-all'], queryFn: () => api.get('/proveedores', { params: { activo: '0' } }).then(r => r.data.data) });
+  const { data: proveedores = [] } = useQuery({ queryKey: ['proveedores-all'], queryFn: () => api.get('/proveedores', { params: { activo: '1' } }).then(r => r.data.data) });
   const { data: rendimiento = [] } = useQuery({ queryKey: ['rendimiento-proveedores'], queryFn: () => api.get('/mermas/rendimiento-proveedores').then(r => r.data.data) });
 
   const { data: historialCompras } = useQuery({
@@ -101,6 +101,17 @@ export default function ProveedoresPage() {
     onSuccess: () => { qc.invalidateQueries(['proveedores-all']); toast.success('Proveedor actualizado'); setModal(null); },
     onError: (e) => toast.error(e.response?.data?.message || 'Error')
   });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => api.delete(`/proveedores/${id}`),
+    onSuccess: () => { qc.invalidateQueries(['proveedores-all']); qc.invalidateQueries(['proveedores']); toast.success('Proveedor eliminado'); },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error')
+  });
+
+  const handleDelete = (p) => {
+    if (!confirm(`¿Eliminar a "${p.nombre}"? Sus compras y mermas quedarán en el historial.`)) return;
+    deleteMut.mutate(p.id);
+  };
 
   const handleSave = (form) => form.id ? updateMut.mutate(form) : createMut.mutate(form);
 
@@ -135,11 +146,14 @@ export default function ProveedoresPage() {
                     <p className="text-xs text-gray-500">{p.contacto} {p.telefono && `• ${p.telefono}`}</p>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setModal(p)} className="text-gray-400 hover:text-brand-400 transition-colors">
+                <div className="flex gap-2 items-center">
+                  <button onClick={() => setModal(p)} className="p-1.5 rounded-lg text-gray-400 hover:text-brand-400 hover:bg-brand-500/10 transition-colors">
                     <Edit size={15} />
                   </button>
-                  <button onClick={() => setExpanded(expanded === p.id ? null : p.id)} className="text-gray-400 hover:text-white transition-colors">
+                  <button onClick={() => handleDelete(p)} disabled={deleteMut.isPending} className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                    <Trash2 size={15} />
+                  </button>
+                  <button onClick={() => setExpanded(expanded === p.id ? null : p.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-white transition-colors">
                     {expanded === p.id ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                   </button>
                 </div>
