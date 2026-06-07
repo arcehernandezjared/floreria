@@ -31,21 +31,17 @@ async function getDashboard(req, res) {
        ORDER BY (i.stock_actual / GREATEST(i.stock_minimo, 1)) ASC LIMIT 10`
     );
 
-    // 4. Alertas margen
-    const alertasMargen = await query(
-      `SELECT c.id, c.nombre, c.precio_venta, c.margen_minimo,
-              (SELECT COALESCE(SUM(fi.cantidad * i.costo_unitario), 0)
-               FROM ficha_ingredientes fi JOIN insumos i ON fi.insumo_id = i.id
-               WHERE fi.catalogo_id = c.id) as costo_actual
-       FROM catalogo c WHERE c.activo = 1`
-    );
-
-    const alertasMargenFiltradas = alertasMargen
-      .map(a => ({
-        ...a,
-        margen_real: calcularMargen(parseFloat(a.precio_venta), parseFloat(a.costo_actual))
-      }))
-      .filter(a => a.margen_real < parseFloat(a.margen_minimo));
+    // 4. Ahorros de salario acumulados este mes
+    let nomina_mes = 0;
+    try {
+      const nominaMes = await queryOne(
+        `SELECT COALESCE(SUM(provision_dia), 0) as total
+         FROM fondo_quincena_log
+         WHERE periodo_inicio >= ? AND periodo_inicio <= LAST_DAY(?)`,
+        [mesInicio, mesInicio]
+      );
+      nomina_mes = parseFloat(nominaMes?.total || 0);
+    } catch (_) {}
 
     // 5. Termómetro nómina
     const config = await queryOne('SELECT * FROM config_nomina LIMIT 1');
@@ -108,16 +104,18 @@ async function getDashboard(req, res) {
     // 8. Ventas mes para utilidad
     const ventasMes = await queryOne(
       `SELECT COALESCE(SUM(precio_venta), 0) as monto, COALESCE(SUM(costo_produccion), 0) as costo
-       FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) >= ?`,
-      [mesInicio]
+       FROM ventas_floreria
+       WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) BETWEEN ? AND ?`,
+      [mesInicio, hoy]
     );
 
     const mermasMes = await queryOne(
-      'SELECT COALESCE(SUM(costo_total), 0) as total FROM mermas WHERE fecha >= ?',
-      [mesInicio]
+      'SELECT COALESCE(SUM(costo_total), 0) as total FROM mermas WHERE fecha BETWEEN ? AND ?',
+      [mesInicio, hoy]
     );
 
-    const utilidad_mes = parseFloat(ventasMes.monto) - parseFloat(ventasMes.costo) - parseFloat(mermasMes.total) - parseFloat(gastosMes.total);
+    // Ventas del mes − ahorros de salarios − gastos − mermas
+    const utilidad_mes = parseFloat(ventasMes.monto) - nomina_mes - parseFloat(gastosMes.total) - parseFloat(mermasMes.total);
 
     // 9. Pedidos pendientes (tabla puede no existir aún)
     let pedidosPendientes = { count: 0, proximos: [] };
@@ -135,7 +133,6 @@ async function getDashboard(req, res) {
         ventas_hoy: ventasHoy,
         mermas_hoy: mermasHoy,
         stock_bajo: stockBajo,
-        alertas_margen: alertasMargenFiltradas,
         termometro_nomina: termometro,
         top_mermas_semana: topMermas,
         ventas_semana: ventasSemana,

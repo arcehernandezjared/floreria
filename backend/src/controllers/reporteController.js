@@ -18,20 +18,20 @@ async function getVentas(req, res) {
                 COALESCE(SUM(costo_produccion),0) as total_costos,
                 COALESCE(SUM(precio_venta - costo_produccion),0) as margen_bruto,
                 COALESCE(AVG(precio_venta),0) as ticket_promedio
-         FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?`,
+         FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) BETWEEN ? AND ?`,
         [desde, hasta]
       ),
       query(
-        `SELECT DATE(fecha) as dia, COUNT(*) as ventas,
+        `SELECT DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) as dia, COUNT(*) as ventas,
                 COALESCE(SUM(precio_venta),0) as ingresos
-         FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?
+         FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) BETWEEN ? AND ?
          GROUP BY dia ORDER BY dia`,
         [desde, hasta]
       ),
       query(
         `SELECT canal, COUNT(*) as ventas,
                 COALESCE(SUM(precio_venta),0) as ingresos
-         FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?
+         FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) BETWEEN ? AND ?
          GROUP BY canal ORDER BY ingresos DESC`,
         [desde, hasta]
       ),
@@ -39,13 +39,13 @@ async function getVentas(req, res) {
         `SELECT nombre_arreglo, COUNT(*) as veces,
                 COALESCE(SUM(precio_venta),0) as total,
                 COALESCE(AVG(precio_venta),0) as promedio
-         FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?
+         FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) BETWEEN ? AND ?
          GROUP BY nombre_arreglo ORDER BY total DESC LIMIT 10`,
         [desde, hasta]
       ),
       query(
         `SELECT nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, fecha
-         FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?
+         FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) BETWEEN ? AND ?
          ORDER BY fecha DESC LIMIT 150`,
         [desde, hasta]
       )
@@ -146,7 +146,7 @@ async function getFinanciero(req, res) {
       queryOne(
         `SELECT COALESCE(SUM(precio_venta),0) as ingresos,
                 COUNT(*) as total_ventas
-         FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?`,
+         FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) BETWEEN ? AND ?`,
         [desde, hasta]
       ),
       queryOne(
@@ -162,8 +162,8 @@ async function getFinanciero(req, res) {
         [desde, hasta]
       ),
       query(
-        `SELECT DATE(fecha) as dia, SUM(precio_venta) as ingresos
-         FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?
+        `SELECT DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) as dia, SUM(precio_venta) as ingresos
+         FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha,'+00:00','-06:00')) BETWEEN ? AND ?
          GROUP BY dia ORDER BY dia`,
         [desde, hasta]
       )
