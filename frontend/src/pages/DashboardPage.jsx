@@ -216,8 +216,8 @@ export default function DashboardPage() {
         <TarjetaGrande
           Icon={ShoppingBag}
           titulo="Ventas de hoy"
-          valor={ventasHoyCount === 0 ? 'Ninguna aún' : `${ventasHoyCount} ${ventasHoyCount === 1 ? 'venta' : 'ventas'}`}
-          detalle={ventasHoyCount > 0 ? `Has cobrado ${formatMoney(ventasHoyMonto)} hoy` : 'El día apenas comienza'}
+          valor={ventasHoyMonto === 0 ? 'Ninguna aún' : formatMoney(ventasHoyMonto)}
+          detalle={ventasHoyCount > 0 ? `${ventasHoyCount} ${ventasHoyCount === 1 ? 'venta' : 'ventas'} hoy` : 'El día apenas comienza'}
           colorFondo="bg-emerald-500/10 border-emerald-500/20"
           colorValor="text-emerald-400"
           iconBg="bg-emerald-500/15" iconColor="text-emerald-400"
