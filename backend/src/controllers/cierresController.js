@@ -89,7 +89,8 @@ async function getSummary(req, res) {
       [fecha]
     );
 
-    const utilidad = parseFloat(ventas.total) - parseFloat(ventas.costos) - parseFloat(gastos.total) - parseFloat(mermas.total);
+    // Fórmula: ventas − gastos − mermas (sin costos de producción, sin nómina en preview)
+    const utilidad = parseFloat(ventas.total) - parseFloat(gastos.total) - parseFloat(mermas.total);
 
     res.json({
       success: true,
@@ -97,7 +98,6 @@ async function getSummary(req, res) {
         fecha,
         ventas_count:  parseInt(ventas.count),
         ventas_total:  parseFloat(ventas.total),
-        costos_total:  parseFloat(ventas.costos),
         gastos_total:  parseFloat(gastos.total),
         mermas_total:  parseFloat(mermas.total),
         utilidad:      parseFloat(utilidad.toFixed(2)),
@@ -120,26 +120,12 @@ async function createCierre(req, res) {
 
     // Calcular valores del día automáticamente
     const [ventas, gastos, mermas] = await Promise.all([
-      queryOne(`SELECT COUNT(*) as count, COALESCE(SUM(precio_venta),0) as total, COALESCE(SUM(costo_produccion),0) as costos FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`, [fecha]),
+      queryOne(`SELECT COUNT(*) as count, COALESCE(SUM(precio_venta),0) as total FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`, [fecha]),
       queryOne(`SELECT COALESCE(SUM(monto),0) as total FROM gastos WHERE DATE(fecha) = ?`, [fecha]),
       queryOne(`SELECT COALESCE(SUM(costo_total),0) as total FROM mermas WHERE DATE(fecha) = ?`, [fecha]),
     ]);
 
-    const utilidad = parseFloat(ventas.total) - parseFloat(ventas.costos) - parseFloat(gastos.total) - parseFloat(mermas.total);
-
-    await query(
-      `INSERT INTO cierres_dia (fecha, ventas_count, ventas_total, costos_total, gastos_total, mermas_total, utilidad, efectivo_caja, notas, usuario_nombre)
-       VALUES (?,?,?,?,?,?,?,?,?,?)
-       ON DUPLICATE KEY UPDATE
-         ventas_count=VALUES(ventas_count), ventas_total=VALUES(ventas_total),
-         costos_total=VALUES(costos_total), gastos_total=VALUES(gastos_total),
-         mermas_total=VALUES(mermas_total), utilidad=VALUES(utilidad),
-         efectivo_caja=VALUES(efectivo_caja), notas=VALUES(notas), usuario_nombre=VALUES(usuario_nombre)`,
-      [fecha, ventas.count, ventas.total, ventas.costos, gastos.total, mermas.total,
-       utilidad.toFixed(2), parseFloat(efectivo_caja) || 0, notas || null, usuario_nombre || null]
-    );
-
-    // ── Registrar provisión de nómina usando la función centralizada ──
+    // ── Registrar provisión de nómina ──
     let provisionRegistrada = 0;
     try {
       const resultado = await registrarProvisionNomina(fecha, parseFloat(ventas.total));
@@ -151,7 +137,22 @@ async function createCierre(req, res) {
       logger.error(`Cierre: error al registrar provisión nómina: ${nomErr.message}`);
     }
 
-    logger.info(`Cierre registrado: ${fecha} — ₡${ventas.total} ventas, utilidad ₡${utilidad.toFixed(0)}, provisión ₡${provisionRegistrada.toFixed(0)}`);
+    // Rentabilidad = ventas − nómina − gastos − mermas
+    const utilidad = parseFloat(ventas.total) - provisionRegistrada - parseFloat(gastos.total) - parseFloat(mermas.total);
+
+    await query(
+      `INSERT INTO cierres_dia (fecha, ventas_count, ventas_total, costos_total, gastos_total, mermas_total, utilidad, efectivo_caja, notas, usuario_nombre)
+       VALUES (?,?,?,?,?,?,?,?,?,?)
+       ON DUPLICATE KEY UPDATE
+         ventas_count=VALUES(ventas_count), ventas_total=VALUES(ventas_total),
+         costos_total=VALUES(costos_total), gastos_total=VALUES(gastos_total),
+         mermas_total=VALUES(mermas_total), utilidad=VALUES(utilidad),
+         efectivo_caja=VALUES(efectivo_caja), notas=VALUES(notas), usuario_nombre=VALUES(usuario_nombre)`,
+      [fecha, ventas.count, ventas.total, provisionRegistrada.toFixed(2), gastos.total, mermas.total,
+       utilidad.toFixed(2), parseFloat(efectivo_caja) || 0, notas || null, usuario_nombre || null]
+    );
+
+    logger.info(`Cierre registrado: ${fecha} — ₡${ventas.total} ventas, rentabilidad ₡${utilidad.toFixed(0)}, provisión ₡${provisionRegistrada.toFixed(0)}`);
     res.json({ success: true, message: `Cierre del ${fecha} registrado correctamente`, provision: provisionRegistrada });
   } catch (e) {
     logger.error(`createCierre: ${e.message}`);

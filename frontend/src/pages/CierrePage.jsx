@@ -45,7 +45,7 @@ function FilaCierre({ c }) {
             <p className="text-sm font-bold text-white tabular-nums">{formatMoney(c.ventas_total)}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-500">Utilidad</p>
+            <p className="text-xs text-gray-500">Rentabilidad</p>
             <p className={`text-sm font-bold tabular-nums ${util >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               {formatMoney(c.utilidad)}
             </p>
@@ -69,16 +69,16 @@ function FilaCierre({ c }) {
                   <p className="text-sm font-bold text-emerald-400">{formatMoney(c.ventas_total)}</p>
                 </div>
                 <div className="bg-gray-900/50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Nómina</p>
+                  <p className="text-sm font-bold text-blue-400">{formatMoney(c.costos_total)}</p>
+                </div>
+                <div className="bg-gray-900/50 rounded-lg p-3">
                   <p className="text-xs text-gray-500">Gastos</p>
                   <p className="text-sm font-bold text-red-400">{formatMoney(c.gastos_total)}</p>
                 </div>
                 <div className="bg-gray-900/50 rounded-lg p-3">
                   <p className="text-xs text-gray-500">Mermas</p>
                   <p className="text-sm font-bold text-orange-400">{formatMoney(c.mermas_total)}</p>
-                </div>
-                <div className="bg-gray-900/50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Costo producción</p>
-                  <p className="text-sm font-bold text-yellow-400">{formatMoney(c.costos_total)}</p>
                 </div>
               </div>
               {c.notas && (
@@ -185,7 +185,7 @@ export default function CierrePage() {
       {/* KPIs del rango seleccionado */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCierre
-          label={hayFiltros ? 'Utilidad del período' : 'Utilidad total acumulada'}
+          label={hayFiltros ? 'Rentabilidad del período' : 'Rentabilidad acumulada'}
           valor={formatMoney(totalUtilidad)}
           color={totalUtilidad >= 0 ? 'text-emerald-400' : 'text-red-400'}
           sub={`${cierresFiltrados.length} días cerrados`}
@@ -196,7 +196,7 @@ export default function CierrePage() {
           color="text-white"
         />
         <KpiCierre
-          label="Promedio utilidad / día"
+          label="Promedio rentabilidad / día"
           valor={formatMoney(promDiario)}
           color={promDiario >= 0 ? 'text-blue-400' : 'text-red-400'}
         />
@@ -227,7 +227,7 @@ export default function CierrePage() {
 
         {/* Resumen del día */}
         {s && (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
               <p className="text-xs text-gray-400">Ventas</p>
               <p className="text-lg font-extrabold text-emerald-400 tabular-nums">{s.ventas_count}</p>
@@ -241,13 +241,10 @@ export default function CierrePage() {
               <p className="text-xs text-gray-400">Mermas</p>
               <p className="text-lg font-extrabold text-orange-400 tabular-nums">{formatMoney(s.mermas_total)}</p>
             </div>
-            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-center">
-              <p className="text-xs text-gray-400">Costo prod.</p>
-              <p className="text-lg font-extrabold text-yellow-400 tabular-nums">{formatMoney(s.costos_total)}</p>
-            </div>
             <div className={`border rounded-xl p-3 text-center ${utilHoy >= 0 ? 'bg-blue-500/10 border-blue-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-              <p className="text-xs text-gray-400">Utilidad</p>
+              <p className="text-xs text-gray-400">Rentabilidad</p>
               <p className={`text-lg font-extrabold tabular-nums ${utilHoy >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{formatMoney(utilHoy)}</p>
+              <p className="text-xs text-gray-600 mt-0.5">sin nómina</p>
             </div>
           </div>
         )}
@@ -358,7 +355,7 @@ export default function CierrePage() {
             <div className="bg-gray-800/40 border border-gray-700 rounded-xl px-5 py-3 flex flex-wrap gap-6 text-sm">
               <div><span className="text-gray-500">Días cerrados: </span><span className="text-white font-semibold">{cierresFiltrados.length}</span></div>
               <div><span className="text-gray-500">Ventas: </span><span className="text-emerald-400 font-semibold">{formatMoney(totalVentas)}</span></div>
-              <div><span className="text-gray-500">Utilidad: </span><span className={`font-semibold ${totalUtilidad >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{formatMoney(totalUtilidad)}</span></div>
+              <div><span className="text-gray-500">Rentabilidad: </span><span className={`font-semibold ${totalUtilidad >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{formatMoney(totalUtilidad)}</span></div>
               <div><span className="text-gray-500">Gastos: </span><span className="text-red-400 font-semibold">{formatMoney(cierresFiltrados.reduce((s, c) => s + parseFloat(c.gastos_total || 0), 0))}</span></div>
               <div><span className="text-gray-500">Mermas: </span><span className="text-orange-400 font-semibold">{formatMoney(cierresFiltrados.reduce((s, c) => s + parseFloat(c.mermas_total || 0), 0))}</span></div>
             </div>
