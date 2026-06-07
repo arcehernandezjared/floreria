@@ -479,7 +479,7 @@ export default function CotizacionesPage() {
       <div className="card p-0 overflow-hidden">
 
         {/* ── Móvil: tarjetas ── */}
-        <div className="sm:hidden">
+        <div className="card-view">
           {isLoading && <p className="text-center text-gray-600 py-8 text-sm">Cargando...</p>}
           {!isLoading && cotizaciones.length === 0 && (
             <div className="py-10 text-center">
@@ -540,7 +540,7 @@ export default function CotizacionesPage() {
         </div>
 
         {/* ── Desktop: tabla ── */}
-        <div className="hidden sm:block overflow-x-auto">
+        <div className="table-view overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 bg-gray-800/50">

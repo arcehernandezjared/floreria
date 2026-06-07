@@ -188,7 +188,7 @@ export default function ComprasPage() {
       <div className="card p-0 overflow-hidden">
 
         {/* ── Móvil: tarjetas ── */}
-        <div className="sm:hidden">
+        <div className="card-view">
           {compras.length === 0 && <p className="text-gray-600 text-sm text-center py-8">Sin compras registradas</p>}
           <div className="divide-y divide-gray-800/60">
             {compras.map(c => (
@@ -215,7 +215,7 @@ export default function ComprasPage() {
         </div>
 
         {/* ── Desktop: tabla ── */}
-        <div className="hidden sm:block overflow-x-auto">
+        <div className="table-view overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-gray-800">
               <tr>

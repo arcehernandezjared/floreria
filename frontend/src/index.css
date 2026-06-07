@@ -29,6 +29,26 @@
   .td { @apply px-4 py-3 text-sm text-gray-300; }
 }
 
+/* ── Responsive card/table toggle ──────────────────────────────────────────
+   .card-view  = visible en móvil, oculto en desktop
+   .table-view = oculto en móvil, visible en desktop
+   Cuando el sidebar está abierto, el breakpoint sube a 1024px para
+   compensar los 256px que ocupa el menú lateral.
+─────────────────────────────────────────────────────────────────────────── */
+.card-view  { display: block; }
+.table-view { display: none;  }
+@media (min-width: 640px) {
+  .card-view  { display: none;  }
+  .table-view { display: block; }
+}
+/* Con sidebar abierto: breakpoint sube a 1024px */
+main.sidebar-open .card-view  { display: block !important; }
+main.sidebar-open .table-view { display: none  !important; }
+@media (min-width: 1024px) {
+  main.sidebar-open .card-view  { display: none  !important; }
+  main.sidebar-open .table-view { display: block !important; }
+}
+
 /* ── Markdown en el chat del asistente ── */
 .markdown-chat { font-size: 0.875rem; line-height: 1.6; }
 .markdown-chat p { margin-bottom: 0.4rem; }

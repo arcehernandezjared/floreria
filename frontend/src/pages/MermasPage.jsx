@@ -269,7 +269,7 @@ export default function MermasPage() {
             ) : (
               <>
                 {/* ── Móvil: tarjetas ── */}
-                <div className="sm:hidden divide-y divide-gray-800/60 -mx-4">
+                <div className="card-view divide-y divide-gray-800/60 -mx-4">
                   {mermas.map(m => (
                     <div key={m.id} className="px-4 py-3">
                       <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -293,7 +293,7 @@ export default function MermasPage() {
                 </div>
 
                 {/* ── Desktop: tabla ── */}
-                <div className="hidden sm:block overflow-x-auto">
+                <div className="table-view overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-800">

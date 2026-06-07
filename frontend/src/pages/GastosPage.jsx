@@ -184,7 +184,7 @@ export default function GastosPage() {
 
           <div className="card p-0 overflow-hidden">
             {/* Mobile: tarjetas */}
-            <div className="sm:hidden divide-y divide-gray-800/60">
+            <div className="card-view divide-y divide-gray-800/60">
               {gastos.map(g => (
                 <div key={g.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -211,7 +211,7 @@ export default function GastosPage() {
               {gastos.length === 0 && <p className="text-gray-600 text-sm text-center py-8">Sin gastos para este período</p>}
             </div>
             {/* Desktop: tabla */}
-            <div className="hidden sm:block overflow-x-auto">
+            <div className="table-view overflow-x-auto">
               <table className="w-full">
                 <thead className="border-b border-gray-800">
                   <tr>
