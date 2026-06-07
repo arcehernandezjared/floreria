@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
-  ClipboardList, TrendingUp, DollarSign, ShoppingBag, Filter,
+  ClipboardList, ShoppingBag, Filter,
   MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send
 } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -274,10 +274,8 @@ export default function RegistroVentasPage() {
     queryFn: () => api.get(`/catalogo/ventas?${params}`).then(r => r.data.data),
   });
 
-  const totalIngresos = ventas.reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0);
-  const totalCosto    = ventas.reduce((s, v) => s + parseFloat(v.costo_produccion || 0), 0);
-  const utilidad      = totalIngresos - totalCosto;
-  const margenProm    = totalIngresos > 0 ? ((utilidad / totalIngresos) * 100).toFixed(1) : '0.0';
+  const totalIngresos  = ventas.reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0);
+  const promPorVenta   = ventas.length > 0 ? totalIngresos / ventas.length : 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -322,7 +320,7 @@ export default function RegistroVentasPage() {
       </div>
 
       {/* Tarjetas resumen */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="card">
           <p className="text-xs text-gray-500 mb-1">Ventas</p>
           <p className="text-2xl font-bold text-white">{ventas.length}</p>
@@ -334,16 +332,9 @@ export default function RegistroVentasPage() {
           </p>
         </div>
         <div className="card">
-          <p className="text-xs text-gray-500 mb-1">Costo total</p>
-          <p className="text-2xl font-bold text-yellow-400">
-            ₡{totalCosto.toLocaleString('es-CR', { minimumFractionDigits: 0 })}
-          </p>
-        </div>
-        <div className="card">
-          <p className="text-xs text-gray-500 mb-1">Utilidad · Margen</p>
+          <p className="text-xs text-gray-500 mb-1">Promedio por venta</p>
           <p className="text-2xl font-bold text-brand-400">
-            ₡{utilidad.toLocaleString('es-CR', { minimumFractionDigits: 0 })}
-            <span className="text-sm text-gray-500 ml-1">({margenProm}%)</span>
+            ₡{promPorVenta.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
         </div>
       </div>
@@ -359,17 +350,15 @@ export default function RegistroVentasPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Cliente</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Canal</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Precio venta</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Costo</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Margen</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/60">
               {isLoading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-600">Cargando...</td></tr>
+                <tr><td colSpan={6} className="text-center py-12 text-gray-600">Cargando...</td></tr>
               ) : ventas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12">
+                  <td colSpan={6} className="text-center py-12">
                     <div className="flex flex-col items-center gap-2">
                       <ShoppingBag size={32} className="text-gray-700" />
                       <p className="text-gray-500 text-sm">No hay ventas en este período</p>
@@ -379,8 +368,6 @@ export default function RegistroVentasPage() {
               ) : (
                 ventas.map(v => {
                   const precio    = parseFloat(v.precio_venta || 0);
-                  const costo     = parseFloat(v.costo_produccion || 0);
-                  const margen    = precio > 0 ? (((precio - costo) / precio) * 100).toFixed(1) : '0.0';
                   const canalInfo = CANAL_LABELS[v.canal] || { label: v.canal, color: 'text-gray-400 bg-gray-700' };
                   const CanalIcon = canalInfo.icon;
                   const fecha     = new Date(v.fecha).toLocaleDateString('es-CR', {
@@ -400,14 +387,6 @@ export default function RegistroVentasPage() {
                       </td>
                       <td className="px-4 py-3 text-right text-emerald-400 font-semibold">
                         ₡{precio.toLocaleString('es-CR', { minimumFractionDigits: 0 })}
-                      </td>
-                      <td className="px-4 py-3 text-right text-yellow-500">
-                        ₡{costo.toLocaleString('es-CR', { minimumFractionDigits: 0 })}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={`font-semibold ${parseFloat(margen) >= 30 ? 'text-emerald-400' : parseFloat(margen) >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>
-                          {margen}%
-                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
