@@ -475,79 +475,140 @@ export default function CotizacionesPage() {
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Tabla / Tarjetas */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-800 bg-gray-800/50">
-              {['#', 'Cliente', 'Evento', 'Fecha evento', 'Total', 'Estado', 'Acciones'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800/60">
-            {isLoading ? (
-              <tr><td colSpan={7} className="text-center py-12 text-gray-600">Cargando...</td></tr>
-            ) : cotizaciones.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="text-center py-12">
-                  <FileText size={32} className="text-gray-700 mx-auto mb-2" />
-                  <p className="text-gray-500 text-sm">No hay cotizaciones aún</p>
-                  <button onClick={() => setShowForm(true)} className="mt-3 text-purple-400 text-xs hover:text-purple-300">
-                    + Crear primera cotización
-                  </button>
-                </td>
-              </tr>
-            ) : cotizaciones.map(cot => {
+
+        {/* ── Móvil: tarjetas ── */}
+        <div className="sm:hidden">
+          {isLoading && <p className="text-center text-gray-600 py-8 text-sm">Cargando...</p>}
+          {!isLoading && cotizaciones.length === 0 && (
+            <div className="py-10 text-center">
+              <FileText size={28} className="text-gray-700 mx-auto mb-2" />
+              <p className="text-gray-500 text-sm mb-3">No hay cotizaciones aún</p>
+              <button onClick={() => setShowForm(true)} className="text-purple-400 text-xs hover:text-purple-300">+ Crear primera cotización</button>
+            </div>
+          )}
+          <div className="divide-y divide-gray-800/60">
+            {cotizaciones.map(cot => {
               const est = ESTADO_CONFIG[cot.estado] || ESTADO_CONFIG.borrador;
               const EstIcon = est.icon;
               const fechaEvento = cot.fecha_evento
                 ? new Date(cot.fecha_evento).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' })
                 : '—';
               return (
-                <tr key={cot.id} className="hover:bg-gray-800/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="font-mono text-purple-400 text-xs font-semibold">{cot.numero}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-white font-medium text-sm">{cot.cliente_nombre}</p>
-                    {cot.cliente_email && <p className="text-gray-500 text-xs">{cot.cliente_email}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-400">{cot.tipo_evento || '—'}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">{fechaEvento}</td>
-                  <td className="px-4 py-3 text-emerald-400 font-semibold">{formatMoney(cot.total)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg ${est.color}`}>
-                      <EstIcon size={11} />{est.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
+                <div key={cot.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-mono text-purple-400 text-xs font-semibold">{cot.numero}</span>
+                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg ${est.color}`}>
+                          <EstIcon size={10} />{est.label}
+                        </span>
+                      </div>
+                      <p className="text-white font-medium text-sm">{cot.cliente_nombre}</p>
+                      {cot.cliente_email && <p className="text-gray-500 text-xs">{cot.cliente_email}</p>}
+                    </div>
+                    <p className="text-emerald-400 font-bold text-sm whitespace-nowrap flex-shrink-0">{formatMoney(cot.total)}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    <div className="text-xs text-gray-500">
+                      {cot.tipo_evento && <span className="mr-2">{cot.tipo_evento}</span>}
+                      <span>{fechaEvento}</span>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
                       <button onClick={() => generarPDF({...cot, items: typeof cot.items === 'string' ? JSON.parse(cot.items || '[]') : cot.items})}
-                        className="p-1.5 text-gray-500 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all" title="Descargar PDF">
+                        className="p-2 text-gray-500 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg" title="Descargar PDF">
                         <Download size={14} />
                       </button>
-                      <button onClick={() => handleEnviar(cot)}
-                        disabled={enviando === cot.id || !cot.cliente_email}
-                        className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all disabled:opacity-30" title={cot.cliente_email ? 'Enviar por correo' : 'Sin email'}>
+                      <button onClick={() => handleEnviar(cot)} disabled={enviando === cot.id || !cot.cliente_email}
+                        className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg disabled:opacity-30" title={cot.cliente_email ? 'Enviar correo' : 'Sin email'}>
                         {enviando === cot.id ? <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Send size={14} />}
                       </button>
-                      <button onClick={() => handleEditar(cot)}
-                        className="p-1.5 text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-all" title="Editar">
+                      <button onClick={() => handleEditar(cot)} className="p-2 text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg" title="Editar">
                         <Edit size={14} />
                       </button>
                       <button onClick={() => { if (confirm('¿Eliminar esta cotización?')) deleteMutation.mutate(cot.id); }}
-                        className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all" title="Eliminar">
+                        className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg" title="Eliminar">
                         <Trash2 size={14} />
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </div>
+                </div>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        </div>
+
+        {/* ── Desktop: tabla ── */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800 bg-gray-800/50">
+                {['#', 'Cliente', 'Evento', 'Fecha evento', 'Total', 'Estado', 'Acciones'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800/60">
+              {isLoading ? (
+                <tr><td colSpan={7} className="text-center py-12 text-gray-600">Cargando...</td></tr>
+              ) : cotizaciones.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-12">
+                    <FileText size={32} className="text-gray-700 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm">No hay cotizaciones aún</p>
+                    <button onClick={() => setShowForm(true)} className="mt-3 text-purple-400 text-xs hover:text-purple-300">
+                      + Crear primera cotización
+                    </button>
+                  </td>
+                </tr>
+              ) : cotizaciones.map(cot => {
+                const est = ESTADO_CONFIG[cot.estado] || ESTADO_CONFIG.borrador;
+                const EstIcon = est.icon;
+                const fechaEvento = cot.fecha_evento
+                  ? new Date(cot.fecha_evento).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : '—';
+                return (
+                  <tr key={cot.id} className="hover:bg-gray-800/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-purple-400 text-xs font-semibold">{cot.numero}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-white font-medium text-sm">{cot.cliente_nombre}</p>
+                      {cot.cliente_email && <p className="text-gray-500 text-xs">{cot.cliente_email}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-400">{cot.tipo_evento || '—'}</td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">{fechaEvento}</td>
+                    <td className="px-4 py-3 text-emerald-400 font-semibold">{formatMoney(cot.total)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg ${est.color}`}>
+                        <EstIcon size={11} />{est.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => generarPDF({...cot, items: typeof cot.items === 'string' ? JSON.parse(cot.items || '[]') : cot.items})}
+                          className="p-1.5 text-gray-500 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all" title="Descargar PDF">
+                          <Download size={14} />
+                        </button>
+                        <button onClick={() => handleEnviar(cot)} disabled={enviando === cot.id || !cot.cliente_email}
+                          className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all disabled:opacity-30" title={cot.cliente_email ? 'Enviar por correo' : 'Sin email'}>
+                          {enviando === cot.id ? <div className="w-3.5 h-3.5 border border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Send size={14} />}
+                        </button>
+                        <button onClick={() => handleEditar(cot)} className="p-1.5 text-gray-500 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-all" title="Editar">
+                          <Edit size={14} />
+                        </button>
+                        <button onClick={() => { if (confirm('¿Eliminar esta cotización?')) deleteMutation.mutate(cot.id); }}
+                          className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all" title="Eliminar">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 

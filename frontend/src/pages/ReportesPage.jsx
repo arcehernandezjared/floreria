@@ -707,7 +707,29 @@ function Tabla({ title, cols, rows }) {
       <div className="px-5 py-4 border-b border-gray-800">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{title}</p>
       </div>
-      <div className="overflow-x-auto">
+
+      {/* ── Móvil: tarjetas ── */}
+      <div className="sm:hidden">
+        {rows.length === 0 && <p className="text-gray-600 text-sm text-center py-8">Sin datos en el período</p>}
+        <div className="divide-y divide-gray-800/60">
+          {rows.map((row, i) => (
+            <div key={i} className="px-4 py-3">
+              <p className="text-white font-medium text-sm mb-1.5">{row[0]}</p>
+              <div className="space-y-0.5">
+                {cols.slice(1).map((col, j) => (
+                  <div key={j} className="flex justify-between items-center gap-2">
+                    <span className="text-xs text-gray-500">{col}</span>
+                    <span className="text-xs text-gray-300">{row[j + 1]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Desktop: tabla ── */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full">
           <thead className="border-b border-gray-800">
             <tr>{cols.map(c => <th key={c} className="th">{c}</th>)}</tr>

@@ -413,9 +413,55 @@ export default function RegistroVentasPage() {
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Tabla / Tarjetas */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
+
+        {/* ── Móvil: tarjetas ── */}
+        <div className="sm:hidden">
+          {isLoading && <p className="text-center text-gray-600 py-8 text-sm">Cargando...</p>}
+          {!isLoading && ventas.length === 0 && (
+            <div className="py-10 text-center">
+              <ShoppingBag size={28} className="text-gray-700 mx-auto mb-2" />
+              <p className="text-gray-500 text-sm">No hay ventas en este período</p>
+            </div>
+          )}
+          <div className="divide-y divide-gray-800/60">
+            {ventas.map(v => {
+              const precio = parseFloat(v.precio_venta || 0);
+              const canalInfo = CANAL_LABELS[v.canal] || { label: v.canal, color: 'text-gray-400 bg-gray-700' };
+              const CanalIcon = canalInfo.icon;
+              const fecha = new Date(v.fecha).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+              return (
+                <div key={v.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <p className="text-white font-medium text-sm leading-tight flex-1">{v.nombre_arreglo}</p>
+                    <p className="text-emerald-400 font-bold text-sm whitespace-nowrap flex-shrink-0">₡{precio.toLocaleString('es-CR')}</p>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">{fecha}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex gap-1.5 items-center flex-wrap">
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg ${canalInfo.color}`}>
+                        {CanalIcon && <CanalIcon size={10} />}{canalInfo.label}
+                      </span>
+                      {v.nombre_cliente && <span className="text-xs text-gray-500 truncate max-w-32">{v.nombre_cliente}</span>}
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button onClick={() => generarReciboPDF(v)} title="Reimprimir" className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-gray-700">
+                        <Printer size={15} />
+                      </button>
+                      <button onClick={() => setModalEmail(v)} title="Enviar correo" className="p-2 rounded-lg text-gray-500 hover:text-sky-400 hover:bg-sky-500/10">
+                        <Mail size={15} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Desktop: tabla ── */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 bg-gray-800/50">
@@ -439,51 +485,37 @@ export default function RegistroVentasPage() {
                     </div>
                   </td>
                 </tr>
-              ) : (
-                ventas.map(v => {
-                  const precio    = parseFloat(v.precio_venta || 0);
-                  const canalInfo = CANAL_LABELS[v.canal] || { label: v.canal, color: 'text-gray-400 bg-gray-700' };
-                  const CanalIcon = canalInfo.icon;
-                  const fecha     = new Date(v.fecha).toLocaleDateString('es-CR', {
-                    day: '2-digit', month: 'short', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                  });
-                  return (
-                    <tr key={v.id} className="hover:bg-gray-800/30 transition-colors">
-                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{fecha}</td>
-                      <td className="px-4 py-3 text-white font-medium">{v.nombre_arreglo}</td>
-                      <td className="px-4 py-3 text-gray-400">{v.nombre_cliente || <span className="text-gray-700">—</span>}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg ${canalInfo.color}`}>
-                          {CanalIcon && <CanalIcon size={11} />}
-                          {canalInfo.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-emerald-400 font-semibold">
-                        ₡{precio.toLocaleString('es-CR', { minimumFractionDigits: 0 })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => generarReciboPDF(v)}
-                            title="Reimprimir recibo"
-                            className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-700 transition-colors"
-                          >
-                            <Printer size={15} />
-                          </button>
-                          <button
-                            onClick={() => setModalEmail(v)}
-                            title="Enviar por correo"
-                            className="p-1.5 rounded-lg text-gray-500 hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
-                          >
-                            <Mail size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              ) : ventas.map(v => {
+                const precio    = parseFloat(v.precio_venta || 0);
+                const canalInfo = CANAL_LABELS[v.canal] || { label: v.canal, color: 'text-gray-400 bg-gray-700' };
+                const CanalIcon = canalInfo.icon;
+                const fecha     = new Date(v.fecha).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                return (
+                  <tr key={v.id} className="hover:bg-gray-800/30 transition-colors">
+                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{fecha}</td>
+                    <td className="px-4 py-3 text-white font-medium">{v.nombre_arreglo}</td>
+                    <td className="px-4 py-3 text-gray-400">{v.nombre_cliente || <span className="text-gray-700">—</span>}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg ${canalInfo.color}`}>
+                        {CanalIcon && <CanalIcon size={11} />}{canalInfo.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-emerald-400 font-semibold">
+                      ₡{precio.toLocaleString('es-CR', { minimumFractionDigits: 0 })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => generarReciboPDF(v)} title="Reimprimir recibo" className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-700 transition-colors">
+                          <Printer size={15} />
+                        </button>
+                        <button onClick={() => setModalEmail(v)} title="Enviar por correo" className="p-1.5 rounded-lg text-gray-500 hover:text-sky-400 hover:bg-sky-500/10 transition-colors">
+                          <Mail size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -491,7 +523,7 @@ export default function RegistroVentasPage() {
         {ventas.length > 0 && (
           <div className="px-4 py-3 border-t border-gray-800 bg-gray-800/30 flex flex-wrap justify-between items-center gap-2">
             <p className="text-xs text-gray-600">{ventas.length} ventas mostradas (máx. 100)</p>
-            <div className="flex gap-6 text-xs">
+            <div className="flex flex-wrap gap-3 text-xs">
               <span className="text-gray-500">Mostrador: <span className="text-white font-medium">{ventas.filter(v => v.canal === 'mostrador').length}</span></span>
               <span className="text-gray-500">Externo: <span className="text-white font-medium">{ventas.filter(v => v.canal === 'externo').length}</span></span>
               <span className="text-gray-500">WhatsApp: <span className="text-white font-medium">{ventas.filter(v => v.canal === 'whatsapp').length}</span></span>

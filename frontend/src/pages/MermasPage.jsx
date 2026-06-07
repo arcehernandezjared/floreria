@@ -267,47 +267,72 @@ export default function MermasPage() {
             {mermas.length === 0 ? (
               <p className="text-gray-600 text-sm text-center py-4">Sin mermas para esta fecha</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="th">Insumo</th>
-                      <th className="th">Cantidad</th>
-                      <th className="th">Costo Unit.</th>
-                      <th className="th">Motivo</th>
-                      <th className="th">Costo Total</th>
-                      <th className="th"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mermas.map(m => (
-                      <tr key={m.id} className="table-row">
-                        <td className="td">{m.insumo_nombre}</td>
-                        <td className="td">{parseFloat(m.cantidad)} {m.unidad}</td>
-                        <td className="td text-gray-400">{formatMoney(m.costo_unitario_momento)}</td>
-                        <td className="td">
-                          <span className={`badge border ${MOTIVO_COLORS[m.motivo] || ''}`}>
-                            {MOTIVO_LABELS[m.motivo] || m.motivo}
-                          </span>
-                        </td>
-                        <td className="td text-red-400 font-semibold">{formatMoney(m.costo_total)}</td>
-                        <td className="td">
-                          <div className="flex gap-1">
-                            <button onClick={() => setEditando(m)}
-                              className="p-1.5 rounded-lg text-gray-500 hover:text-brand-400 hover:bg-brand-500/10 transition-colors">
-                              <Pencil size={14} />
-                            </button>
-                            <button onClick={() => handleDelete(m)} disabled={deleteMut.isPending}
-                              className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
+              <>
+                {/* ── Móvil: tarjetas ── */}
+                <div className="sm:hidden divide-y divide-gray-800/60 -mx-4">
+                  {mermas.map(m => (
+                    <div key={m.id} className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <p className="text-white font-medium text-sm flex-1">{m.insumo_nombre}</p>
+                        <p className="text-red-400 font-bold text-sm whitespace-nowrap">{formatMoney(m.costo_total)}</p>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`badge border ${MOTIVO_COLORS[m.motivo] || ''}`}>{MOTIVO_LABELS[m.motivo] || m.motivo}</span>
+                        <span className="text-xs text-gray-500">{parseFloat(m.cantidad)} {m.unidad} × {formatMoney(m.costo_unitario_momento)}</span>
+                      </div>
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => setEditando(m)} className="p-2 rounded-lg text-gray-500 hover:text-brand-400 hover:bg-brand-500/10">
+                          <Pencil size={14} />
+                        </button>
+                        <button onClick={() => handleDelete(m)} disabled={deleteMut.isPending} className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Desktop: tabla ── */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="th">Insumo</th>
+                        <th className="th">Cantidad</th>
+                        <th className="th">Costo Unit.</th>
+                        <th className="th">Motivo</th>
+                        <th className="th">Costo Total</th>
+                        <th className="th"></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {mermas.map(m => (
+                        <tr key={m.id} className="table-row">
+                          <td className="td">{m.insumo_nombre}</td>
+                          <td className="td">{parseFloat(m.cantidad)} {m.unidad}</td>
+                          <td className="td text-gray-400">{formatMoney(m.costo_unitario_momento)}</td>
+                          <td className="td">
+                            <span className={`badge border ${MOTIVO_COLORS[m.motivo] || ''}`}>
+                              {MOTIVO_LABELS[m.motivo] || m.motivo}
+                            </span>
+                          </td>
+                          <td className="td text-red-400 font-semibold">{formatMoney(m.costo_total)}</td>
+                          <td className="td">
+                            <div className="flex gap-1">
+                              <button onClick={() => setEditando(m)} className="p-1.5 rounded-lg text-gray-500 hover:text-brand-400 hover:bg-brand-500/10 transition-colors">
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => handleDelete(m)} disabled={deleteMut.isPending} className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>

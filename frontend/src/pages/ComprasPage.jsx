@@ -186,7 +186,36 @@ export default function ComprasPage() {
       </div>
 
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
+
+        {/* ── Móvil: tarjetas ── */}
+        <div className="sm:hidden">
+          {compras.length === 0 && <p className="text-gray-600 text-sm text-center py-8">Sin compras registradas</p>}
+          <div className="divide-y divide-gray-800/60">
+            {compras.map(c => (
+              <div key={c.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium text-sm">{c.proveedor_nombre}</p>
+                    {c.notas && <p className="text-xs text-gray-500 truncate">{c.notas}</p>}
+                  </div>
+                  <p className="text-white font-bold text-sm whitespace-nowrap flex-shrink-0">{formatMoney(c.total)}</p>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`badge ${c.estado === 'recibida' ? 'badge-green' : c.estado === 'parcial' ? 'badge-yellow' : 'badge-blue'}`}>
+                      {c.estado}
+                    </span>
+                    <span className="text-xs text-gray-500">{c.total_items} items</span>
+                  </div>
+                  <span className="text-xs text-gray-500">{formatDate(c.fecha)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Desktop: tabla ── */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-gray-800">
               <tr>
