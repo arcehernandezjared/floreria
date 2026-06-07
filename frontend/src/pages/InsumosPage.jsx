@@ -435,7 +435,6 @@ function AjusteModal({ insumo, onClose, onSave }) {
 export default function InsumosPage() {
   const qc = useQueryClient();
   const [modal, setModal] = useState(null);
-  const [ajusteTarget, setAjusteTarget] = useState(null);
   const [showCategorias, setShowCategorias] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [busqueda, setBusqueda]           = useState('');
@@ -458,12 +457,6 @@ export default function InsumosPage() {
   const updateMut = useMutation({
     mutationFn: ({ id, ...data }) => api.put(`/insumos/${id}`, data),
     onSuccess: () => { qc.invalidateQueries(['insumos']); toast.success('Insumo actualizado'); setModal(null); },
-    onError: (e) => toast.error(e.response?.data?.message || 'Error')
-  });
-
-  const ajusteMut = useMutation({
-    mutationFn: ({ id, ...data }) => api.post(`/insumos/${id}/ajustar-stock`, data),
-    onSuccess: () => { qc.invalidateQueries(['insumos']); toast.success('Stock ajustado'); setAjusteTarget(null); },
     onError: (e) => toast.error(e.response?.data?.message || 'Error')
   });
 
@@ -599,9 +592,6 @@ export default function InsumosPage() {
                         <button onClick={() => setModal(i)} className="text-gray-400 hover:text-brand-400 transition-colors" title="Editar">
                           <Edit size={15} />
                         </button>
-                        <button onClick={() => setAjusteTarget(i)} className="text-gray-400 hover:text-yellow-400 transition-colors text-xs font-medium" title="Ajustar stock">
-                          ±Stock
-                        </button>
                         {confirmDeleteId === i.id ? (
                           <div className="flex items-center gap-1">
                             <button
@@ -653,13 +643,6 @@ export default function InsumosPage() {
             proveedores={proveedores}
             onClose={() => setModal(null)}
             onSave={handleSave}
-          />
-        )}
-        {ajusteTarget && (
-          <AjusteModal
-            insumo={ajusteTarget}
-            onClose={() => setAjusteTarget(null)}
-            onSave={(data) => ajusteMut.mutate({ id: ajusteTarget.id, ...data })}
           />
         )}
       </AnimatePresence>
