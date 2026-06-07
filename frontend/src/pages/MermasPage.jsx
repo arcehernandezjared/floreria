@@ -91,14 +91,16 @@ function EditModal({ merma, proveedores, onClose, onSave }) {
 export default function MermasPage() {
   const qc = useQueryClient();
   const [form, setForm] = useState(emptyForm);
-  const [filtroFecha, setFiltroFecha] = useState(new Date().toISOString().split('T')[0]);
+  const hoy = new Date().toISOString().split('T')[0];
+  const [desde, setDesde] = useState(hoy);
+  const [hasta, setHasta] = useState(hoy);
   const [editando, setEditando] = useState(null);
 
   const { data: insumos = [] } = useQuery({ queryKey: ['insumos-activos'], queryFn: () => api.get('/insumos', { params: { tipo: 'flor' } }).then(r => r.data.data) });
   const { data: proveedores = [] } = useQuery({ queryKey: ['proveedores'], queryFn: () => api.get('/proveedores').then(r => r.data.data) });
   const { data: mermas = [] } = useQuery({
-    queryKey: ['mermas', filtroFecha],
-    queryFn: () => api.get('/mermas', { params: { desde: filtroFecha, hasta: filtroFecha } }).then(r => r.data.data)
+    queryKey: ['mermas', desde, hasta],
+    queryFn: () => api.get('/mermas', { params: { desde, hasta } }).then(r => r.data.data)
   });
   const { data: mermasMes = [] } = useQuery({
     queryKey: ['mermas-motivo'],
@@ -247,10 +249,17 @@ export default function MermasPage() {
           </div>
 
           <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Mermas del Día</h3>
-              <div className="flex items-center gap-3">
-                <input type="date" className="input py-1 text-xs w-36" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} />
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Historial de Mermas</h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500">Desde</span>
+                  <input type="date" className="input py-1 text-xs w-36" value={desde} onChange={e => setDesde(e.target.value)} />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500">Hasta</span>
+                  <input type="date" className="input py-1 text-xs w-36" value={hasta} onChange={e => setHasta(e.target.value)} />
+                </div>
                 <span className="text-red-400 font-bold text-sm">{formatMoney(totalDia)}</span>
               </div>
             </div>
