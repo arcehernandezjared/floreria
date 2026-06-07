@@ -1,5 +1,6 @@
 const { Resend } = require('resend');
 const logger = require('../utils/logger');
+const { query } = require('../config/database');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -128,4 +129,24 @@ async function enviarRecibo(req, res) {
   }
 }
 
-module.exports = { enviarRecibo };
+async function registrarVentaManual(req, res) {
+  try {
+    const { concepto, monto, fecha, canal, nombre_cliente } = req.body;
+    if (!monto || !fecha) return res.status(400).json({ success: false, message: 'Monto y fecha son requeridos' });
+    if (isNaN(parseFloat(monto)) || parseFloat(monto) <= 0) return res.status(400).json({ success: false, message: 'Monto inválido' });
+
+    const result = await query(
+      `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, fecha)
+       VALUES (NULL, ?, ?, ?, 0, ?, ?)`,
+      [concepto || 'Venta general', canal || 'mostrador', parseFloat(monto), nombre_cliente || null, fecha]
+    );
+
+    logger.info(`Venta manual registrada: ${concepto || 'Venta general'} ₡${monto} el ${fecha}`);
+    res.status(201).json({ success: true, message: 'Venta registrada', id: result.insertId });
+  } catch (e) {
+    logger.error(`registrarVentaManual: ${e.message}`);
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+module.exports = { enviarRecibo, registrarVentaManual };

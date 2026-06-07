@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, ShoppingBag, Filter,
-  MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send
+  MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send, Plus
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -260,11 +260,69 @@ function ModalEmail({ venta, onClose }) {
   );
 }
 
+function ModalVentaManual({ onClose, onSave, isPending }) {
+  const [form, setForm] = useState({ concepto: 'Venta general', monto: '', fecha: hoy(), canal: 'mostrador', nombre_cliente: '' });
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="card w-full max-w-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-bold">Registrar ingreso manual</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="label">Concepto</label>
+            <input className="input" value={form.concepto} onChange={e => set('concepto', e.target.value)} placeholder="Venta general" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Monto (₡) *</label>
+              <input className="input font-bold text-emerald-400" type="number" step="100" value={form.monto}
+                onChange={e => set('monto', e.target.value)} placeholder="0" autoFocus />
+            </div>
+            <div>
+              <label className="label">Fecha *</label>
+              <input className="input" type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Canal</label>
+              <select className="input" value={form.canal} onChange={e => set('canal', e.target.value)}>
+                <option value="mostrador">Mostrador</option>
+                <option value="externo">Externo</option>
+                <option value="whatsapp">WhatsApp</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Cliente (opcional)</label>
+              <input className="input" value={form.nombre_cliente} onChange={e => set('nombre_cliente', e.target.value)} placeholder="Sin nombre" />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => {
+              if (!form.monto || parseFloat(form.monto) <= 0) return toast.error('Escribe el monto');
+              onSave(form);
+            }} disabled={isPending} className="btn-primary flex-1 justify-center">
+              {isPending ? 'Guardando...' : 'Registrar'}
+            </button>
+            <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RegistroVentasPage() {
+  const qc = useQueryClient();
   const [desde, setDesde]         = useState(inicioMes());
   const [hasta, setHasta]         = useState(hoy());
   const [canal, setCanal]         = useState('todos');
-  const [modalEmail, setModalEmail] = useState(null); // venta seleccionada
+  const [modalEmail, setModalEmail] = useState(null);
+  const [modalManual, setModalManual] = useState(false);
 
   const params = new URLSearchParams({ desde, hasta });
   if (canal !== 'todos') params.set('canal', canal);
@@ -274,6 +332,17 @@ export default function RegistroVentasPage() {
     queryFn: () => api.get(`/catalogo/ventas?${params}`).then(r => r.data.data),
   });
 
+  const ventaManualMut = useMutation({
+    mutationFn: (data) => api.post('/ventas/manual', data),
+    onSuccess: () => {
+      qc.invalidateQueries(['registro-ventas']);
+      qc.invalidateQueries(['dashboard']);
+      toast.success('Venta registrada');
+      setModalManual(false);
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al registrar'),
+  });
+
   const totalIngresos  = ventas.reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0);
   const promPorVenta   = ventas.length > 0 ? totalIngresos / ventas.length : 0;
 
@@ -281,14 +350,19 @@ export default function RegistroVentasPage() {
     <div className="space-y-6 animate-fade-in">
 
       {/* Encabezado */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-brand-600/15 rounded-xl flex items-center justify-center">
-          <ClipboardList size={20} className="text-brand-400" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-brand-600/15 rounded-xl flex items-center justify-center">
+            <ClipboardList size={20} className="text-brand-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Registro de Ventas</h1>
+            <p className="text-gray-500 text-sm">Historial completo de ventas por período</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-white">Registro de Ventas</h1>
-          <p className="text-gray-500 text-sm">Historial completo de ventas por período</p>
-        </div>
+        <button onClick={() => setModalManual(true)} className="btn-primary whitespace-nowrap">
+          <Plus size={15} /> Ingreso manual
+        </button>
       </div>
 
       {/* Filtros */}
@@ -428,6 +502,15 @@ export default function RegistroVentasPage() {
 
       {/* Modal email */}
       {modalEmail && <ModalEmail venta={modalEmail} onClose={() => setModalEmail(null)} />}
+
+      {/* Modal ingreso manual */}
+      {modalManual && (
+        <ModalVentaManual
+          onClose={() => setModalManual(false)}
+          onSave={(data) => ventaManualMut.mutate(data)}
+          isPending={ventaManualMut.isPending}
+        />
+      )}
     </div>
   );
 }
