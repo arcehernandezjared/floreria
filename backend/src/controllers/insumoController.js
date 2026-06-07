@@ -106,7 +106,7 @@ async function createInsumo(req, res) {
 async function updateInsumo(req, res) {
   try {
     const { id } = req.params;
-    const { nombre, categoria_id, proveedor_id, unidad, stock_minimo, costo_unitario, vida_util_dias, codigo, imagen_url, precio_venta } = req.body;
+    const { nombre, categoria_id, proveedor_id, unidad, stock_actual, stock_minimo, costo_unitario, vida_util_dias, codigo, imagen_url, precio_venta } = req.body;
 
     const existing = await queryOne('SELECT * FROM insumos WHERE id = ?', [id]);
     if (!existing) return res.status(404).json({ success: false, message: 'Insumo no encontrado' });
@@ -121,10 +121,11 @@ async function updateInsumo(req, res) {
     }
 
     await query(
-      `UPDATE insumos SET nombre=?, categoria_id=?, proveedor_id=?, unidad=?, stock_minimo=?, costo_unitario=?, vida_util_dias=?, codigo=?, imagen_url=?, precio_venta=?
+      `UPDATE insumos SET nombre=?, categoria_id=?, proveedor_id=?, unidad=?, stock_actual=?, stock_minimo=?, costo_unitario=?, vida_util_dias=?, codigo=?, imagen_url=?, precio_venta=?
        WHERE id=?`,
       [nombre || existing.nombre, categoria_id || existing.categoria_id,
        proveedor_id || existing.proveedor_id, unidad || existing.unidad,
+       stock_actual ?? existing.stock_actual,
        stock_minimo ?? existing.stock_minimo, costo_unitario ?? existing.costo_unitario,
        vida_util_dias ?? existing.vida_util_dias,
        codigo !== undefined ? (codigo || null) : existing.codigo,
