@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { path: '/dashboard',        icon: LayoutDashboard, label: 'Inicio' },
   { path: '/punto-venta',      icon: CreditCard,      label: 'Hacer una Venta', highlight: true },
   { path: '/registro-ventas',  icon: ClipboardList,   label: 'Mis Ventas' },
-  { path: '/insumos',          icon: Package,         label: 'Mi Inventario' },
+  { path: '/insumos',          icon: Package,         label: 'Inventario' },
   { path: '/catalogo',         icon: ShoppingBag,     label: 'Mis Arreglos' },
   { path: '/mermas',           icon: Trash2,          label: 'Pérdidas' },
   { path: '/proveedores',      icon: Truck,           label: 'Proveedores' },
