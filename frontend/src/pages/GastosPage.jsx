@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Receipt, Trash2, MessageSquare } from 'lucide-react';
+import { Plus, Receipt, Trash2, MessageSquare, Pencil } from 'lucide-react';
 import api, { formatMoney, formatDate } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,7 +38,15 @@ const CATEGORIAS_FORM = [
 
 function GastoModal({ gasto, onClose, onSave }) {
   const hoy = new Date().toISOString().split('T')[0];
-  const [form, setForm] = useState(gasto || { concepto: '', monto: '', tipo: 'variable', categoria: 'otro', fecha: hoy, recurrente: false, notas: '' });
+  const [form, setForm] = useState(() => {
+    if (!gasto) return { concepto: '', monto: '', tipo: 'variable', categoria: 'otro', fecha: hoy, recurrente: false, notas: '' };
+    return {
+      ...gasto,
+      fecha: gasto.fecha ? gasto.fecha.toString().split('T')[0] : hoy,
+      recurrente: Boolean(gasto.recurrente),
+      notas: gasto.notas || '',
+    };
+  });
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -111,6 +119,12 @@ export default function GastosPage() {
   const createMut = useMutation({
     mutationFn: (data) => api.post('/gastos', data),
     onSuccess: () => { qc.invalidateQueries(['gastos']); qc.invalidateQueries(['gastos-resumen']); toast.success('Gasto registrado'); setModal(null); },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error')
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/gastos/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries(['gastos']); qc.invalidateQueries(['gastos-resumen']); toast.success('Gasto actualizado'); setModal(null); },
     onError: (e) => toast.error(e.response?.data?.message || 'Error')
   });
 
@@ -204,9 +218,14 @@ export default function GastosPage() {
                     <td className="td text-gray-400">{formatDate(g.fecha)}</td>
                     <td className="td font-semibold text-white">{formatMoney(g.monto)}</td>
                     <td className="td">
-                      <button onClick={() => { if (confirm('¿Eliminar este gasto?')) deleteMut.mutate(g.id); }} className="text-gray-600 hover:text-red-400 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setModal(g)} className="text-gray-600 hover:text-brand-400 transition-colors" title="Editar">
+                          <Pencil size={14} />
+                        </button>
+                        <button onClick={() => { if (confirm('¿Eliminar este gasto?')) deleteMut.mutate(g.id); }} className="text-gray-600 hover:text-red-400 transition-colors" title="Eliminar">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -221,7 +240,17 @@ export default function GastosPage() {
 
       <AnimatePresence>
         {modal && (
-          <GastoModal gasto={null} onClose={() => setModal(null)} onSave={(data) => createMut.mutate(data)} />
+          <GastoModal
+            gasto={modal === 'nuevo' ? null : modal}
+            onClose={() => setModal(null)}
+            onSave={(data) => {
+              if (modal === 'nuevo') {
+                createMut.mutate(data);
+              } else {
+                updateMut.mutate({ id: modal.id, data });
+              }
+            }}
+          />
         )}
       </AnimatePresence>
     </div>
