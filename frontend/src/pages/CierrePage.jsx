@@ -182,6 +182,13 @@ export default function CierrePage() {
         <p className="text-gray-500 text-sm mt-0.5">Control diario del negocio</p>
       </div>
 
+      {/* Aviso días sin cierre */}
+      {!cierreHoyExiste && s && parseFloat(s.ventas_total) > 0 && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 text-sm text-yellow-300">
+          <span className="font-semibold">Atención:</span> el total de "Vendido" de abajo no incluye hoy ({formatMoney(s.ventas_total)}). Registrá el cierre de hoy para que se sume.
+        </div>
+      )}
+
       {/* KPIs del rango seleccionado */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCierre
@@ -194,6 +201,7 @@ export default function CierrePage() {
           label={hayFiltros ? 'Vendido en el período' : 'Total vendido (histórico)'}
           valor={formatMoney(totalVentas)}
           color="text-white"
+          sub="solo días con cierre"
         />
         <KpiCierre
           label="Promedio rentabilidad / día"

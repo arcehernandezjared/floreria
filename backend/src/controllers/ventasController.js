@@ -135,10 +135,12 @@ async function registrarVentaManual(req, res) {
     if (!monto || !fecha) return res.status(400).json({ success: false, message: 'Monto y fecha son requeridos' });
     if (isNaN(parseFloat(monto)) || parseFloat(monto) <= 0) return res.status(400).json({ success: false, message: 'Monto inválido' });
 
+    // Guardar como mediodía UTC para que CONVERT_TZ a CR (-6h) quede en la fecha correcta
+    const fechaUTC = `${fecha} 12:00:00`;
     const result = await query(
       `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, fecha)
        VALUES (NULL, ?, ?, ?, 0, ?, ?)`,
-      [concepto || 'Venta general', canal || 'mostrador', parseFloat(monto), nombre_cliente || null, fecha]
+      [concepto || 'Venta general', canal || 'mostrador', parseFloat(monto), nombre_cliente || null, fechaUTC]
     );
 
     logger.info(`Venta manual registrada: ${concepto || 'Venta general'} ₡${monto} el ${fecha}`);
