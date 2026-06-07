@@ -179,7 +179,7 @@ function exportPDF(tab, data, periodo) {
     kpiRow([
       { label: 'Total Ventas', value: r.total_ventas || 0 },
       { label: 'Ingresos', value: fmtPDF(r.total_ingresos) },
-      { label: 'Ticket Promedio', value: fmtPDF(r.ticket_promedio) }
+      { label: 'Ingreso por Dia', value: fmtPDF(r.total_ingresos / Math.max(1, (data.porDia || []).length)) }
     ]);
     sectionTitle('Top Productos');
     addTable(
@@ -313,7 +313,7 @@ function exportExcel(tab, data, periodo) {
     addSheet('Resumen', ['Métrica', 'Valor'], [
       ['Total ventas', r.total_ventas || 0],
       ['Ingresos totales', parseFloat(r.total_ingresos || 0)],
-      ['Ticket promedio', parseFloat(r.ticket_promedio || 0)],
+      ['Ingreso promedio por día', parseFloat(r.total_ingresos || 0) / Math.max(1, (data.porDia || []).length)],
     ]);
     addSheet('Top Productos', ['Producto', 'Veces vendido', 'Total ingresos (₡)', 'Precio prom (₡)'],
       (data.topProductos || []).map(p => [p.nombre_arreglo, p.veces, parseFloat(p.total), parseFloat(p.promedio)])
@@ -425,12 +425,15 @@ function ReporteVentas({ data }) {
     }]
   }), [data.porCanal]);
 
+  const diasConVentas = (data.porDia || []).length;
+  const promedioDiario = diasConVentas > 0 ? parseFloat(r.total_ingresos || 0) / diasConVentas : 0;
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <Kpi title="Total Ventas" value={r.total_ventas || 0} sub="transacciones" color="#10b981" />
         <Kpi title="Ingresos Totales" value={formatMoney(r.total_ingresos)} color="#3b82f6" />
-        <Kpi title="Ticket Promedio" value={formatMoney(r.ticket_promedio)} color="#8b5cf6" />
+        <Kpi title="Ingreso por Día" value={formatMoney(promedioDiario)} sub={`promedio en ${diasConVentas} día(s)`} color="#8b5cf6" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
