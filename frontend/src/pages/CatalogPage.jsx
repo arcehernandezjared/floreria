@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, RefreshCw, ShoppingBag, Edit, Eye, Search,
-  Flower2, X, AlertTriangle, TrendingUp, Sparkles,
+  Plus, RefreshCw, Edit, Eye, Search,
+  Flower2, X, DollarSign,
   ImagePlus, Camera, Trash2
 } from 'lucide-react';
-import api, { formatMoney, calcularMargen } from '../utils/api';
+import api, { formatMoney } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -36,27 +36,6 @@ function CantidadInput({ value, onChange }) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function MargenBadge({ margen, minimo }) {
-  const ok  = margen >= minimo;
-  const mid = margen >= 15 && margen < minimo;
-  if (ok)  return <span className="badge badge-green">{margen.toFixed(1)}%</span>;
-  if (mid) return <span className="badge badge-yellow">{margen.toFixed(1)}%</span>;
-  return <span className="badge badge-red">{margen.toFixed(1)}%</span>;
-}
-
-function MargenBar({ margen, minimo }) {
-  const pct   = Math.min(100, Math.max(0, margen));
-  const color = margen >= minimo ? '#10b981' : margen >= 15 ? '#f59e0b' : '#ef4444';
-  return (
-    <div className="relative w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-      <div className="h-full rounded-full transition-all duration-300"
-        style={{ width: `${pct}%`, backgroundColor: color }} />
-      <div className="absolute top-0 bottom-0 w-px bg-gray-500 opacity-70"
-        style={{ left: `${Math.min(100, minimo)}%` }} />
-    </div>
-  );
-}
-
 // ── Modal ficha técnica (solo lectura) ─────────────────────────────────────
 
 function FichaModal({ arreglo, onClose, onEditar }) {
@@ -79,22 +58,16 @@ function FichaModal({ arreglo, onClose, onEditar }) {
             className="w-full h-48 object-cover rounded-xl mb-4 border border-gray-700" />
         )}
 
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-4">
           {[
             { label: 'Precio venta', value: formatMoney(arreglo.precio_venta), cls: 'text-white' },
-            { label: 'Costo actual',  value: formatMoney(arreglo.costo_actual),  cls: 'text-yellow-400' },
+            { label: 'Costo actual', value: formatMoney(arreglo.costo_actual),  cls: 'text-yellow-400' },
           ].map(({ label, value, cls }) => (
             <div key={label} className="bg-gray-800 rounded-xl p-3 text-center">
               <p className="text-xs text-gray-500 mb-1">{label}</p>
               <p className={`text-lg font-bold ${cls}`}>{value}</p>
             </div>
           ))}
-          <div className="bg-gray-800 rounded-xl p-3 text-center">
-            <p className="text-xs text-gray-500 mb-2">Margen</p>
-            <div className="flex justify-center">
-              <MargenBadge margen={arreglo.margen_real || 0} minimo={arreglo.margen_minimo} />
-            </div>
-          </div>
         </div>
 
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Ingredientes</h4>
@@ -148,7 +121,6 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
     nombre:             arreglo?.nombre          ?? '',
     descripcion:        arreglo?.descripcion     ?? '',
     categoria:          arreglo?.categoria       ?? 'General',
-    margen_minimo:      arreglo?.margen_minimo   ?? 30,
     disponible_externo: arreglo?.disponible_externo !== false,
     codigo:             arreglo?.codigo          ?? '',
   });
@@ -188,28 +160,12 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
   const [showDrop,  setShowDrop]  = useState(false);
 
   // Precio
-  const [precioVenta,  setPrecioVenta]  = useState(parseFloat(arreglo?.precio_venta) || 0);
-  const [precioManual, setPrecioManual] = useState(!!arreglo?.id);
+  const [precioVenta, setPrecioVenta] = useState(parseFloat(arreglo?.precio_venta) || 0);
 
   const costoTotal = useMemo(
     () => ingredientes.reduce((s, i) => s + i.cantidad * i.costo_unitario, 0),
     [ingredientes]
   );
-
-  const precioSugerido = useMemo(() => {
-    if (costoTotal <= 0) return 0;
-    const m = parseFloat(form.margen_minimo) / 100;
-    return Math.ceil(costoTotal / (1 - m) / 100) * 100;
-  }, [costoTotal, form.margen_minimo]);
-
-  const margenReal = useMemo(
-    () => calcularMargen(precioVenta, costoTotal),
-    [precioVenta, costoTotal]
-  );
-
-  useEffect(() => {
-    if (!precioManual && precioSugerido > 0) setPrecioVenta(precioSugerido);
-  }, [precioSugerido, precioManual]);
 
   const insumosFiltrados = insumos.filter(i =>
     !buscarIns || i.nombre.toLowerCase().includes(buscarIns.toLowerCase())
@@ -289,10 +245,9 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
 
     onSave({
       ...form,
-      precio_venta:   precioVenta,
-      margen_minimo:  parseFloat(form.margen_minimo),
-      imagen_url:     urlFinal,
-      ingredientes:   ingredientes.map(i => ({ insumo_id: i.insumo_id, cantidad: i.cantidad })),
+      precio_venta: precioVenta,
+      imagen_url:   urlFinal,
+      ingredientes: ingredientes.map(i => ({ insumo_id: i.insumo_id, cantidad: i.cantidad })),
       ...(esEdicion && { id: arreglo.id }),
     });
   };
@@ -359,12 +314,6 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
               <label className="label">Categoría</label>
               <input className="input" placeholder="Románticos, Ramos, Eventos..."
                 value={form.categoria} onChange={e => setForm(p => ({ ...p, categoria: e.target.value }))} />
-            </div>
-            <div>
-              <label className="label">Margen mínimo (%)</label>
-              <input className="input" type="number" min="0" max="100"
-                value={form.margen_minimo}
-                onChange={e => setForm(p => ({ ...p, margen_minimo: Number(e.target.value) }))} />
             </div>
             <div className="col-span-2">
               <label className="label">Descripción</label>
@@ -507,59 +456,17 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
           {/* ── Precio ── */}
           <div className="bg-gray-800/60 rounded-xl p-4 space-y-3">
             <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-              <TrendingUp size={15} className="text-brand-400" /> Precio y margen
+              <DollarSign size={15} className="text-brand-400" /> Precio de venta
             </h4>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="label">Precio de venta (₡)</label>
-                <input
-                  className="input text-brand-400 font-bold text-base"
-                  type="number" min="0" step="1" inputMode="numeric"
-                  value={precioVenta || ''}
-                  onChange={e => { setPrecioVenta(Number(e.target.value)); setPrecioManual(true); }}
-                />
-              </div>
-              <div>
-                <label className="label flex items-center gap-1.5">
-                  <Sparkles size={12} className="text-yellow-400" /> Precio sugerido
-                </label>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-yellow-400 font-semibold text-base">
-                    {formatMoney(precioSugerido)}
-                  </span>
-                  {precioManual && precioSugerido > 0 && (
-                    <button type="button"
-                      onClick={() => { setPrecioVenta(precioSugerido); setPrecioManual(false); }}
-                      className="text-xs text-brand-400 hover:text-brand-300 underline">
-                      Usar éste
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">Con margen {form.margen_minimo}%</p>
-              </div>
-            </div>
-
             <div>
-              <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-gray-500">Margen real</span>
-                <span className={`font-semibold ${
-                  margenReal >= form.margen_minimo ? 'text-emerald-400' :
-                  margenReal >= 15 ? 'text-yellow-400' : 'text-red-400'
-                }`}>{margenReal.toFixed(1)}%</span>
-              </div>
-              <MargenBar margen={margenReal} minimo={parseFloat(form.margen_minimo)} />
-              <div className="flex justify-between text-xs text-gray-600 mt-1">
-                <span>0%</span>
-                <span className="text-gray-500">mín {form.margen_minimo}%</span>
-                <span>100%</span>
-              </div>
-              {costoTotal > 0 && margenReal < form.margen_minimo && (
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-yellow-500">
-                  <AlertTriangle size={12} />
-                  El margen está por debajo del mínimo configurado
-                </div>
-              )}
+              <label className="label">Precio de venta (₡)</label>
+              <input
+                className="input text-brand-400 font-bold text-base"
+                type="number" min="0" step="1" inputMode="numeric"
+                value={precioVenta || ''}
+                onChange={e => setPrecioVenta(Number(e.target.value))}
+              />
             </div>
 
             <div className="flex items-center gap-2 pt-1">
@@ -620,11 +527,9 @@ export default function CatalogPage() {
 
   const recalcularMut = useMutation({
     mutationFn: () => api.post('/catalogo/recalcular-costos'),
-    onSuccess: (res) => {
+    onSuccess: () => {
       qc.invalidateQueries(['catalogo']);
-      const { alertas } = res.data.data;
-      if (alertas.length > 0) toast.error(`${alertas.length} arreglos con margen bajo`);
-      else toast.success('Costos recalculados. Todos los márgenes están bien.');
+      toast.success('Costos recalculados correctamente');
     },
     onError: (e) => toast.error(e.response?.data?.message || 'Error'),
   });
@@ -699,8 +604,6 @@ export default function CatalogPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {catalogoFiltrado.map(a => {
           const costo  = parseFloat(a.costo_actual || a.costo_calculado || 0);
-          const precio = parseFloat(a.precio_venta);
-          const margen = a.margen_real !== undefined ? a.margen_real : calcularMargen(precio, costo);
           const imgUrl = getImgUrl(a.imagen_url);
 
           return (
@@ -721,26 +624,17 @@ export default function CatalogPage() {
               )}
 
               <div className="space-y-2">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-white leading-tight">{a.nombre}</h3>
-                    {a.codigo && <span className="text-xs text-brand-500 font-mono">{a.codigo}</span>}
-                  </div>
-                  <MargenBadge margen={margen} minimo={parseFloat(a.margen_minimo)} />
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-white leading-tight">{a.nombre}</h3>
+                  {a.codigo && <span className="text-xs text-brand-500 font-mono">{a.codigo}</span>}
                 </div>
                 <p className="text-xs text-gray-500">{a.categoria}</p>
 
-                <div className="flex justify-between items-end pt-1">
-                  <div>
-                    <p className="text-xl font-bold text-white">{formatMoney(a.precio_venta)}</p>
-                    <p className="text-xs text-gray-500">
-                      Costo: <span className="text-yellow-400">{formatMoney(costo)}</span>
-                    </p>
-                  </div>
-                  {a.alerta_margen && (
-                    <AlertTriangle size={16} className="text-yellow-400 mb-1 flex-shrink-0"
-                      title="Margen bajo" />
-                  )}
+                <div className="pt-1">
+                  <p className="text-xl font-bold text-white">{formatMoney(a.precio_venta)}</p>
+                  <p className="text-xs text-gray-500">
+                    Costo: <span className="text-yellow-400">{formatMoney(costo)}</span>
+                  </p>
                 </div>
 
                 <div className="flex gap-2 pt-2">
