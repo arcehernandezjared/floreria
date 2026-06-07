@@ -8,5 +8,7 @@ router.get('/', ctrl.getMermas);
 router.get('/por-motivo', ctrl.getMermasPorMotivo);
 router.get('/rendimiento-proveedores', ctrl.getRendimientoProveedores);
 router.post('/', ctrl.registrarMerma);
+router.put('/:id', ctrl.updateMerma);
+router.delete('/:id', ctrl.deleteMerma);
 
 module.exports = router;

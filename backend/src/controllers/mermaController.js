@@ -29,7 +29,7 @@ async function getMermas(req, res) {
 
 async function registrarMerma(req, res) {
   try {
-    const { insumo_id, cantidad, motivo, proveedor_id, notas } = req.body;
+    const { insumo_id, cantidad, motivo, proveedor_id, notas, costo_unitario } = req.body;
     if (!insumo_id || !cantidad || !motivo) {
       return res.status(400).json({ success: false, message: 'insumo_id, cantidad y motivo son requeridos' });
     }
@@ -37,22 +37,20 @@ async function registrarMerma(req, res) {
     const insumo = await queryOne('SELECT * FROM insumos WHERE id = ? AND activo = 1', [insumo_id]);
     if (!insumo) return res.status(404).json({ success: false, message: 'Insumo no encontrado' });
 
-    const costo_unitario_momento = parseFloat(insumo.costo_unitario);
-    const costo_total = parseFloat(cantidad) * costo_unitario_momento;
+    // Usar costo_unitario del body si se envió, si no el del insumo
+    const costoUnit = costo_unitario != null ? parseFloat(costo_unitario) : parseFloat(insumo.costo_unitario);
+    const costo_total = parseFloat(cantidad) * costoUnit;
 
     await transaction(async (conn) => {
-      // Registrar merma
       await conn.query(
         `INSERT INTO mermas (insumo_id, cantidad, costo_unitario_momento, costo_total, motivo, proveedor_id, notas)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [insumo_id, cantidad, costo_unitario_momento, costo_total, motivo, proveedor_id || null, notas || null]
+        [insumo_id, cantidad, costoUnit, costo_total, motivo, proveedor_id || null, notas || null]
       );
 
-      // Descontar stock
       const nuevoStock = Math.max(0, parseFloat(insumo.stock_actual) - parseFloat(cantidad));
       await conn.query('UPDATE insumos SET stock_actual = ? WHERE id = ?', [nuevoStock, insumo_id]);
 
-      // Si llega a 0, marcar disponible_externo=false en catálogos que usan este insumo
       if (nuevoStock <= 0) {
         await conn.query(
           `UPDATE catalogo SET disponible_externo = 0
@@ -65,6 +63,66 @@ async function registrarMerma(req, res) {
     res.status(201).json({ success: true, data: { costo_total }, message: 'Merma registrada correctamente' });
   } catch (error) {
     logger.error(`registrarMerma: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+async function updateMerma(req, res) {
+  try {
+    const { id } = req.params;
+    const { cantidad, motivo, proveedor_id, notas, costo_unitario } = req.body;
+
+    const merma = await queryOne('SELECT * FROM mermas WHERE id = ?', [id]);
+    if (!merma) return res.status(404).json({ success: false, message: 'Merma no encontrada' });
+
+    const insumo = await queryOne('SELECT * FROM insumos WHERE id = ?', [merma.insumo_id]);
+    if (!insumo) return res.status(404).json({ success: false, message: 'Insumo no encontrado' });
+
+    const cantidadNueva = cantidad != null ? parseFloat(cantidad) : parseFloat(merma.cantidad);
+    const costoUnit = costo_unitario != null ? parseFloat(costo_unitario) : parseFloat(merma.costo_unitario_momento);
+    const costo_total = cantidadNueva * costoUnit;
+
+    await transaction(async (conn) => {
+      // Revertir stock de la merma anterior y aplicar la nueva cantidad
+      const stockRevertido = parseFloat(insumo.stock_actual) + parseFloat(merma.cantidad);
+      const stockFinal = Math.max(0, stockRevertido - cantidadNueva);
+      await conn.query('UPDATE insumos SET stock_actual = ? WHERE id = ?', [stockFinal, insumo.id]);
+
+      await conn.query(
+        `UPDATE mermas SET cantidad=?, costo_unitario_momento=?, costo_total=?, motivo=?, proveedor_id=?, notas=?
+         WHERE id=?`,
+        [cantidadNueva, costoUnit, costo_total,
+         motivo ?? merma.motivo, proveedor_id !== undefined ? (proveedor_id || null) : merma.proveedor_id,
+         notas !== undefined ? (notas || null) : merma.notas, id]
+      );
+    });
+
+    res.json({ success: true, message: 'Merma actualizada' });
+  } catch (error) {
+    logger.error(`updateMerma: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+async function deleteMerma(req, res) {
+  try {
+    const { id } = req.params;
+
+    const merma = await queryOne('SELECT * FROM mermas WHERE id = ?', [id]);
+    if (!merma) return res.status(404).json({ success: false, message: 'Merma no encontrada' });
+
+    await transaction(async (conn) => {
+      // Devolver stock al insumo
+      await conn.query(
+        'UPDATE insumos SET stock_actual = stock_actual + ? WHERE id = ?',
+        [parseFloat(merma.cantidad), merma.insumo_id]
+      );
+      await conn.query('DELETE FROM mermas WHERE id = ?', [id]);
+    });
+
+    res.json({ success: true, message: 'Merma eliminada y stock restaurado' });
+  } catch (error) {
+    logger.error(`deleteMerma: ${error.message}`);
     res.status(500).json({ success: false, message: error.message });
   }
 }
@@ -108,4 +166,4 @@ async function getRendimientoProveedores(req, res) {
   }
 }
 
-module.exports = { getMermas, registrarMerma, getMermasPorMotivo, getRendimientoProveedores };
+module.exports = { getMermas, registrarMerma, updateMerma, deleteMerma, getMermasPorMotivo, getRendimientoProveedores };
