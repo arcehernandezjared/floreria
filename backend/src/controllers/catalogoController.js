@@ -321,7 +321,7 @@ async function uploadImagen(req, res) {
 
 async function ventaPersonalizada(req, res) {
   try {
-    const { ingredientes, precio_venta, nombre_cliente, canal, notas, guardar_catalogo, nombre_arreglo, categoria } = req.body;
+    const { ingredientes, precio_venta, nombre_cliente, canal, notas, guardar_catalogo, nombre_arreglo, categoria, imagen_url } = req.body;
 
     if (!ingredientes || ingredientes.length === 0)
       return res.status(400).json({ success: false, message: 'Agrega al menos un ingrediente' });
@@ -346,9 +346,9 @@ async function ventaPersonalizada(req, res) {
 
       if (guardar_catalogo) {
         const [result] = await conn.query(
-          `INSERT INTO catalogo (nombre, categoria, precio_venta, costo_calculado, margen_minimo, disponible_externo)
-           VALUES (?, ?, ?, ?, 30, 1)`,
-          [nombreArreglo, categoria || 'General', precio_venta, costo_produccion]
+          `INSERT INTO catalogo (nombre, categoria, precio_venta, costo_calculado, margen_minimo, disponible_externo, imagen_url)
+           VALUES (?, ?, ?, ?, 30, 1, ?)`,
+          [nombreArreglo, categoria || 'General', precio_venta, costo_produccion, imagen_url || null]
         );
         catalogo_id = result.insertId;
         for (const ing of ingredientes) {

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, Flower2,
-  User, Tag, X, Leaf, LayoutGrid, Printer, Mail, Send, AtSign, Layers, Wand2
+  User, Tag, X, Leaf, LayoutGrid, Printer, Mail, Send, AtSign, Layers, Wand2,
+  Camera, ImagePlus
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -224,14 +225,16 @@ function ArregloPersonalizadoModal({ insumos, onClose, onVender, isPending }) {
   const [insumoSel, setInsumoSel] = useState(null);
   const [cant, setCant]           = useState(1);
   const [showDrop, setShowDrop]   = useState(false);
+  const [imagenPreview, setImagenPreview] = useState(null);
+  const [imagenFile, setImagenFile]       = useState(null);
+  const [subiendo, setSubiendo]           = useState(false);
+  const fileRef = useRef(null);
 
   const insumosFiltrados = insumos.filter(i =>
     buscar && i.nombre.toLowerCase().includes(buscar.toLowerCase()) && parseFloat(i.stock_actual) > 0
   ).slice(0, 8);
 
   const costo = ingredientes.reduce((s, i) => s + i.cantidad * parseFloat(i.costo_unitario), 0);
-  const margen = parseFloat(precio) > 0 && costo > 0
-    ? (((parseFloat(precio) - costo) / parseFloat(precio)) * 100).toFixed(1) : null;
 
   const agregar = () => {
     if (!insumoSel) return;
@@ -243,16 +246,43 @@ function ArregloPersonalizadoModal({ insumos, onClose, onVender, isPending }) {
     setInsumoSel(null); setBuscar(''); setCant(1); setShowDrop(false);
   };
 
-  const handleSubmit = (e) => {
+  const handleImagenChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImagenFile(file);
+    setImagenPreview(URL.createObjectURL(file));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (ingredientes.length === 0) return toast.error('Agrega al menos un ingrediente');
     if (!precio || parseFloat(precio) <= 0) return toast.error('Escribe el precio de venta');
+
+    let imagen_url = null;
+    if (imagenFile) {
+      setSubiendo(true);
+      try {
+        const fd = new FormData();
+        fd.append('imagen', imagenFile);
+        const res = await api.post('/catalogo/upload-imagen', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        imagen_url = res.data.url;
+      } catch {
+        toast.error('Error al subir la imagen');
+        setSubiendo(false);
+        return;
+      }
+      setSubiendo(false);
+    }
+
     onVender({
       ingredientes: ingredientes.map(i => ({ insumo_id: i.insumo_id, cantidad: i.cantidad })),
       precio_venta: parseFloat(precio),
       nombre_arreglo: nombre,
       guardar_catalogo: guardar,
       categoria,
+      imagen_url,
     });
   };
 
@@ -269,6 +299,32 @@ function ArregloPersonalizadoModal({ insumos, onClose, onVender, isPending }) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Imagen */}
+          <div>
+            <label className="label mb-2 block">Foto del arreglo (opcional)</label>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImagenChange} />
+            {imagenPreview ? (
+              <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-700 group">
+                <img src={imagenPreview} alt="preview" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                  <button type="button" onClick={() => fileRef.current?.click()}
+                    className="btn-secondary text-xs py-1.5 px-3"><Camera size={13} /> Cambiar</button>
+                  <button type="button" onClick={() => { setImagenFile(null); setImagenPreview(null); if (fileRef.current) fileRef.current.value = ''; }}
+                    className="btn-danger text-xs py-1.5 px-3"><X size={13} /> Quitar</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => fileRef.current?.click()}
+                className="w-full h-32 border-2 border-dashed border-gray-700 hover:border-brand-500 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors group">
+                <ImagePlus size={24} className="text-gray-600 group-hover:text-brand-400 transition-colors" />
+                <p className="text-sm text-gray-600 group-hover:text-gray-400 transition-colors">
+                  Tomar foto o cargar imagen
+                </p>
+                <p className="text-xs text-gray-700">JPG, PNG o WEBP</p>
+              </button>
+            )}
+          </div>
+
           {/* Nombre */}
           <div>
             <label className="label">Nombre del arreglo</label>
@@ -349,11 +405,6 @@ function ArregloPersonalizadoModal({ insumos, onClose, onVender, isPending }) {
               <label className="label">Precio de venta (₡) *</label>
               <input className="input font-bold text-brand-400" type="number" step="100" placeholder="0"
                 value={precio} onChange={e => setPrecio(e.target.value)} required />
-              {margen !== null && (
-                <p className={`text-xs mt-1 ${parseFloat(margen) >= 30 ? 'text-emerald-400' : parseFloat(margen) >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>
-                  Margen: {margen}%
-                </p>
-              )}
             </div>
             <div className="flex flex-col justify-end">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -369,9 +420,10 @@ function ArregloPersonalizadoModal({ insumos, onClose, onVender, isPending }) {
           </div>
 
           <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={isPending || ingredientes.length === 0}
+            <button type="submit" disabled={isPending || subiendo || ingredientes.length === 0}
               className="btn-primary flex-1 justify-center disabled:opacity-40">
-              <CheckCircle size={15} /> {isPending ? 'Registrando...' : 'Registrar venta'}
+              <CheckCircle size={15} />
+              {subiendo ? 'Subiendo imagen...' : isPending ? 'Registrando...' : 'Registrar venta'}
             </button>
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
           </div>
@@ -607,12 +659,6 @@ export default function PuntoVentaPage() {
   const pagoNum  = parseFloat(pagoCliente) || 0;
   const vuelto   = pagoNum > 0 ? pagoNum - total : null;
 
-  const getMargenColor = (precio, costo) => {
-    if (!precio || !costo) return 'text-gray-500';
-    const m = ((precio - costo) / precio) * 100;
-    return m >= 30 ? 'text-emerald-400' : m >= 15 ? 'text-yellow-400' : 'text-red-400';
-  };
-
   return (
     <div className="flex flex-col lg:flex-row lg:gap-6" style={{ height: 'calc(100dvh - 5rem)', maxHeight: 'calc(100dvh - 5rem)' }}>
 
@@ -737,8 +783,6 @@ export default function PuntoVentaPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
               {catalogoFiltrado.map(arreglo => {
                 const enCarrito = carrito.find(i => i._key === `cat-${arreglo.id}`);
-                const margen = arreglo.precio_venta && arreglo.costo_calculado
-                  ? (((arreglo.precio_venta - arreglo.costo_calculado) / arreglo.precio_venta) * 100).toFixed(0) : 0;
                 return (
                   <motion.div key={arreglo.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     onClick={() => agregarArreglo(arreglo)}
@@ -754,10 +798,7 @@ export default function PuntoVentaPage() {
                     <p className="font-semibold text-white text-sm leading-tight mb-0.5">{arreglo.nombre}</p>
                     {arreglo.codigo && <p className="text-xs text-brand-600 font-mono mb-0.5">{arreglo.codigo}</p>}
                     <p className="text-brand-400 font-bold">{formatMoney(arreglo.precio_venta)}</p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className={`text-xs font-medium ${getMargenColor(arreglo.precio_venta, arreglo.costo_calculado)}`}>
-                        Margen {margen}%
-                      </span>
+                    <div className="flex items-center justify-end mt-1.5">
                       <div className="flex items-center gap-1">
                         {arreglo.costo_calculado > 0
                           ? <span className="text-xs text-emerald-500" title="Descuenta inventario">📦</span>
