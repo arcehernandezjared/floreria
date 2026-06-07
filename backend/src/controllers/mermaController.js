@@ -75,27 +75,33 @@ async function updateMerma(req, res) {
     const merma = await queryOne('SELECT * FROM mermas WHERE id = ?', [id]);
     if (!merma) return res.status(404).json({ success: false, message: 'Merma no encontrada' });
 
-    const insumo = await queryOne('SELECT * FROM insumos WHERE id = ?', [merma.insumo_id]);
-    if (!insumo) return res.status(404).json({ success: false, message: 'Insumo no encontrado' });
+    const cantidadAnterior = parseFloat(merma.cantidad);
+    const cantidadNueva    = cantidad != null ? parseFloat(cantidad) : cantidadAnterior;
+    const costoUnit        = costo_unitario != null ? parseFloat(costo_unitario) : parseFloat(merma.costo_unitario_momento);
+    const costo_total      = cantidadNueva * costoUnit;
 
-    const cantidadNueva = cantidad != null ? parseFloat(cantidad) : parseFloat(merma.cantidad);
-    const costoUnit = costo_unitario != null ? parseFloat(costo_unitario) : parseFloat(merma.costo_unitario_momento);
-    const costo_total = cantidadNueva * costoUnit;
+    // Solo tocar el stock si la cantidad cambió
+    if (cantidadNueva !== cantidadAnterior) {
+      const insumo = await queryOne('SELECT stock_actual FROM insumos WHERE id = ?', [merma.insumo_id]);
+      if (insumo) {
+        const stockFinal = Math.max(0, parseFloat(insumo.stock_actual) + cantidadAnterior - cantidadNueva);
+        await query('UPDATE insumos SET stock_actual = ? WHERE id = ?', [stockFinal, merma.insumo_id]);
+      }
+    }
 
-    await transaction(async (conn) => {
-      // Revertir stock de la merma anterior y aplicar la nueva cantidad
-      const stockRevertido = parseFloat(insumo.stock_actual) + parseFloat(merma.cantidad);
-      const stockFinal = Math.max(0, stockRevertido - cantidadNueva);
-      await conn.query('UPDATE insumos SET stock_actual = ? WHERE id = ?', [stockFinal, insumo.id]);
-
-      await conn.query(
-        `UPDATE mermas SET cantidad=?, costo_unitario_momento=?, costo_total=?, motivo=?, proveedor_id=?, notas=?
-         WHERE id=?`,
-        [cantidadNueva, costoUnit, costo_total,
-         motivo ?? merma.motivo, proveedor_id !== undefined ? (proveedor_id || null) : merma.proveedor_id,
-         notas !== undefined ? (notas || null) : merma.notas, id]
-      );
-    });
+    await query(
+      `UPDATE mermas SET cantidad=?, costo_unitario_momento=?, costo_total=?, motivo=?, proveedor_id=?, notas=?
+       WHERE id=?`,
+      [
+        cantidadNueva,
+        costoUnit,
+        costo_total,
+        motivo          != null ? motivo          : merma.motivo,
+        proveedor_id    !== undefined ? (proveedor_id || null) : merma.proveedor_id,
+        notas           !== undefined ? (notas || null)        : merma.notas,
+        id
+      ]
+    );
 
     res.json({ success: true, message: 'Merma actualizada' });
   } catch (error) {
