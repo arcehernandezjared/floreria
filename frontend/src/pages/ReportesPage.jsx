@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart2, TrendingUp, Package, Trash2, DollarSign,
-  FileText, Sheet, Calendar, ChevronDown, AlertTriangle
+  FileText, Sheet, Calendar, ChevronDown
 } from 'lucide-react';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import {
@@ -179,7 +179,6 @@ function exportPDF(tab, data, periodo) {
     kpiRow([
       { label: 'Total Ventas', value: r.total_ventas || 0 },
       { label: 'Ingresos', value: fmtPDF(r.total_ingresos) },
-      { label: 'Margen Bruto', value: fmtPDF(r.margen_bruto) },
       { label: 'Ticket Promedio', value: fmtPDF(r.ticket_promedio) }
     ]);
     sectionTitle('Top Productos');
@@ -259,15 +258,15 @@ function exportPDF(tab, data, periodo) {
     sectionTitle('Estado Financiero');
     kpiRow([
       { label: 'Ingresos', value: fmtPDF(data.ingresos) },
-      { label: 'Costos Produccion', value: fmtPDF(data.costos_venta) },
-      { label: 'Margen Bruto', value: `${data.margen_pct}%` },
-      { label: 'Utilidad Neta', value: fmtPDF(data.utilidad_neta) }
+      { label: 'Ahorros Nomina', value: fmtPDF(data.nomina) },
+      { label: 'Gastos + Mermas', value: fmtPDF(data.total_gastos + data.mermas) },
+      { label: 'Rentabilidad', value: fmtPDF(data.rentabilidad) }
     ]);
-    sectionTitle('Desglose de Costos');
+    sectionTitle('Desglose de Egresos');
     addTable(
-      ['Concepto', 'Monto', '% del Total'],
+      ['Concepto', 'Monto', '% del Ingreso'],
       [
-        ['Costo de produccion', fmtPDF(data.costos_venta), data.ingresos > 0 ? `${((data.costos_venta / data.ingresos) * 100).toFixed(1)}%` : '0%'],
+        ['Ahorros nomina', fmtPDF(data.nomina), data.ingresos > 0 ? `${((data.nomina / data.ingresos) * 100).toFixed(1)}%` : '0%'],
         ['Mermas (perdidas)', fmtPDF(data.mermas), data.ingresos > 0 ? `${((data.mermas / data.ingresos) * 100).toFixed(1)}%` : '0%'],
         ['Gastos operativos', fmtPDF(data.total_gastos), data.ingresos > 0 ? `${((data.total_gastos / data.ingresos) * 100).toFixed(1)}%` : '0%'],
       ]
@@ -314,8 +313,6 @@ function exportExcel(tab, data, periodo) {
     addSheet('Resumen', ['Métrica', 'Valor'], [
       ['Total ventas', r.total_ventas || 0],
       ['Ingresos totales', parseFloat(r.total_ingresos || 0)],
-      ['Costos totales', parseFloat(r.total_costos || 0)],
-      ['Margen bruto', parseFloat(r.margen_bruto || 0)],
       ['Ticket promedio', parseFloat(r.ticket_promedio || 0)],
     ]);
     addSheet('Top Productos', ['Producto', 'Veces vendido', 'Total ingresos (₡)', 'Precio prom (₡)'],
@@ -381,12 +378,10 @@ function exportExcel(tab, data, periodo) {
   if (tab === 'financiero' && data) {
     addSheet('Financiero', ['Concepto', 'Monto (₡)'], [
       ['Ingresos totales', data.ingresos],
-      ['Costos de producción', data.costos_venta],
-      ['Margen bruto', data.margen_bruto],
-      ['Margen bruto %', data.margen_pct],
+      ['Ahorros nómina', data.nomina],
       ['Mermas (pérdidas)', data.mermas],
       ['Gastos operativos', data.total_gastos],
-      ['Utilidad neta', data.utilidad_neta],
+      ['Rentabilidad', data.rentabilidad],
       ['Total ventas (cantidad)', data.total_ventas],
     ]);
     if ((data.gastos || []).length) {
@@ -394,8 +389,8 @@ function exportExcel(tab, data, periodo) {
         (data.gastos || []).map(g => [g.categoria, parseFloat(g.total)])
       );
     }
-    addSheet('Tendencia', ['Fecha', 'Ingresos (₡)', 'Costos (₡)'],
-      (data.tendencia || []).map(d => [d.dia, parseFloat(d.ingresos), parseFloat(d.costos)])
+    addSheet('Tendencia', ['Fecha', 'Ingresos (₡)'],
+      (data.tendencia || []).map(d => [d.dia, parseFloat(d.ingresos)])
     );
   }
 
@@ -432,11 +427,10 @@ function ReporteVentas({ data }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <Kpi title="Total Ventas" value={r.total_ventas || 0} sub="transacciones" color="#10b981" />
-        <Kpi title="Ingresos" value={formatMoney(r.total_ingresos)} color="#3b82f6" />
-        <Kpi title="Margen Bruto" value={formatMoney(r.margen_bruto)} sub={`${r.total_ingresos > 0 ? ((r.margen_bruto/r.total_ingresos)*100).toFixed(1) : 0}% del ingreso`} color="#8b5cf6" />
-        <Kpi title="Ganancias del mes" value={formatMoney(r.margen_bruto)} sub={`${r.total_ingresos > 0 ? ((r.margen_bruto/r.total_ingresos)*100).toFixed(1) : 0}% del ingreso`} color="#f59e0b" />
+        <Kpi title="Ingresos Totales" value={formatMoney(r.total_ingresos)} color="#3b82f6" />
+        <Kpi title="Ticket Promedio" value={formatMoney(r.ticket_promedio)} color="#8b5cf6" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -626,7 +620,7 @@ function ReporteMermas({ data }) {
 function ReporteFinanciero({ data }) {
   if (!data) return <Empty />;
 
-  const utilColor = data.utilidad_neta >= 0 ? '#10b981' : '#ef4444';
+  const rentColor = (data.rentabilidad ?? 0) >= 0 ? '#10b981' : '#ef4444';
 
   const lineData = useMemo(() => {
     const dias = (data.tendencia || []).map(d => {
@@ -637,49 +631,42 @@ function ReporteFinanciero({ data }) {
     return {
       labels: dias,
       datasets: [
-        { label: 'Ingresos', data: (data.tendencia || []).map(d => parseFloat(d.ingresos)), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 },
-        { label: 'Costos', data: (data.tendencia || []).map(d => parseFloat(d.costos)), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.05)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 }
+        { label: 'Ingresos', data: (data.tendencia || []).map(d => parseFloat(d.ingresos)), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2 }
       ]
     };
   }, [data.tendencia]);
 
   const ingresos = data.ingresos || 0;
-  const costoPct = ingresos > 0 ? (data.costos_venta / ingresos * 100) : 0;
-  const mermasPct = ingresos > 0 ? (data.mermas / ingresos * 100) : 0;
-  const gastosPct = ingresos > 0 ? (data.total_gastos / ingresos * 100) : 0;
-  const utilPct = ingresos > 0 ? (data.utilidad_neta / ingresos * 100) : 0;
+  const nominaPct  = ingresos > 0 ? ((data.nomina || 0) / ingresos * 100) : 0;
+  const mermasPct  = ingresos > 0 ? (data.mermas / ingresos * 100) : 0;
+  const gastosPct  = ingresos > 0 ? (data.total_gastos / ingresos * 100) : 0;
+  const rentPct    = ingresos > 0 ? ((data.rentabilidad || 0) / ingresos * 100) : 0;
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Kpi title="Ingresos Totales" value={formatMoney(data.ingresos)} sub={`${data.total_ventas} ventas`} color="#10b981" />
-        <Kpi title="Margen Bruto" value={formatMoney(data.margen_bruto)} sub={`${data.margen_pct}% del ingreso`} color="#3b82f6" />
-        <Kpi title="Gastos Totales" value={formatMoney(data.total_gastos + data.mermas)} sub={`Mermas + operativos`} color="#f59e0b" />
-        <Kpi title="Utilidad Neta" value={formatMoney(data.utilidad_neta)} sub={`${utilPct.toFixed(1)}% del ingreso`} color={utilColor} />
+        <Kpi title="Ahorros Nómina" value={formatMoney(data.nomina || 0)} sub="provisiones del período" color="#3b82f6" />
+        <Kpi title="Gastos + Mermas" value={formatMoney((data.total_gastos || 0) + (data.mermas || 0))} sub="egresos operativos" color="#f59e0b" />
+        <Kpi title="Rentabilidad" value={formatMoney(data.rentabilidad || 0)} sub={`${rentPct.toFixed(1)}% del ingreso`} color={rentColor} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="card lg:col-span-2">
-          <div className="flex items-center gap-4 mb-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tendencia Ingresos vs Costos</p>
-            <div className="flex items-center gap-4 ml-auto text-xs">
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className="text-gray-400">Ingresos</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-500" /><span className="text-gray-400">Costos</span></div>
-            </div>
-          </div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Tendencia de Ingresos</p>
           <div className="h-52">
             <Line data={lineData} options={{ ...chartBase, plugins: { ...chartBase.plugins, legend: { display: false } } }} />
           </div>
         </div>
 
         <div className="card">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Composición del Ingreso</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Distribución del Ingreso</p>
           <div className="space-y-3">
             {[
-              { label: 'Margen bruto', pct: data.margen_pct, color: '#10b981', value: data.margen_bruto },
-              { label: 'Costo producción', pct: costoPct, color: '#3b82f6', value: data.costos_venta },
-              { label: 'Mermas', pct: mermasPct, color: '#f59e0b', value: data.mermas },
-              { label: 'Gastos', pct: gastosPct, color: '#8b5cf6', value: data.total_gastos },
+              { label: 'Ahorros nómina', pct: nominaPct,  color: '#3b82f6', value: data.nomina || 0 },
+              { label: 'Mermas',         pct: mermasPct,  color: '#f59e0b', value: data.mermas },
+              { label: 'Gastos',         pct: gastosPct,  color: '#8b5cf6', value: data.total_gastos },
+              { label: 'Rentabilidad',   pct: rentPct,    color: '#10b981', value: data.rentabilidad || 0 },
             ].map(item => (
               <div key={item.label}>
                 <div className="flex items-center justify-between mb-1">

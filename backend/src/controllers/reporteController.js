@@ -145,7 +145,6 @@ async function getFinanciero(req, res) {
     const [ventas, mermas, gastosRows, tendencia] = await Promise.all([
       queryOne(
         `SELECT COALESCE(SUM(precio_venta),0) as ingresos,
-                COALESCE(SUM(costo_produccion),0) as costos_venta,
                 COUNT(*) as total_ventas
          FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?`,
         [desde, hasta]
@@ -163,32 +162,37 @@ async function getFinanciero(req, res) {
         [desde, hasta]
       ),
       query(
-        `SELECT DATE(fecha) as dia,
-                SUM(precio_venta) as ingresos,
-                SUM(costo_produccion) as costos
+        `SELECT DATE(fecha) as dia, SUM(precio_venta) as ingresos
          FROM ventas_floreria WHERE DATE(fecha) BETWEEN ? AND ?
          GROUP BY dia ORDER BY dia`,
         [desde, hasta]
       )
     ]);
 
+    let nomina = 0;
+    try {
+      const nominaRow = await queryOne(
+        `SELECT COALESCE(SUM(provision_dia), 0) as total
+         FROM fondo_quincena_log
+         WHERE periodo_inicio BETWEEN ? AND ?`,
+        [desde, hasta]
+      );
+      nomina = parseFloat(nominaRow?.total || 0);
+    } catch (_) {}
+
     const totalGastos = gastosRows.reduce((s, g) => s + parseFloat(g.total), 0);
-    const margenBruto = parseFloat(ventas.ingresos) - parseFloat(ventas.costos_venta);
-    const utilidadNeta = margenBruto - parseFloat(mermas.perdida) - totalGastos;
-    const margenPct = ventas.ingresos > 0 ? (margenBruto / ventas.ingresos * 100) : 0;
+    const rentabilidad = parseFloat(ventas.ingresos) - nomina - parseFloat(mermas.perdida) - totalGastos;
 
     res.json({
       success: true,
       data: {
         periodo: { desde, hasta },
         ingresos: parseFloat(ventas.ingresos),
-        costos_venta: parseFloat(ventas.costos_venta),
         mermas: parseFloat(mermas.perdida),
         gastos: gastosRows,
         total_gastos: totalGastos,
-        margen_bruto: margenBruto,
-        margen_pct: parseFloat(margenPct.toFixed(2)),
-        utilidad_neta: utilidadNeta,
+        nomina,
+        rentabilidad,
         total_ventas: parseInt(ventas.total_ventas),
         tendencia
       }
