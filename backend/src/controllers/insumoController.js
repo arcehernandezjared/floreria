@@ -311,22 +311,28 @@ async function updateCategoria(req, res) {
 async function deleteCategoria(req, res) {
   try {
     const { id } = req.params;
-    const inUse = await queryOne('SELECT COUNT(*) as n FROM insumos WHERE categoria_id = ?', [id]);
-    if (parseInt(inUse?.n || 0) > 0) {
+
+    // Bloquear si hay insumos activos usando esta categoría
+    const activos = await queryOne('SELECT COUNT(*) as n FROM insumos WHERE categoria_id = ? AND activo = 1', [id]);
+    if (parseInt(activos?.n || 0) > 0) {
       return res.status(400).json({
         success: false,
-        message: `No se puede eliminar: ${inUse.n} insumo(s) usan esta categoría. Primero reasigná o eliminá esos insumos.`
+        message: `No se puede eliminar: ${activos.n} insumo(s) activo(s) usan esta categoría.`
       });
     }
+
+    // Los insumos inactivos (soft-deleted) ya están "eliminados" para el usuario —
+    // borrarlos físicamente para liberar la FK antes de eliminar la categoría
+    await query('DELETE FROM insumos WHERE categoria_id = ? AND activo = 0', [id]);
+
     await query('DELETE FROM categorias_insumo WHERE id = ?', [id]);
     res.json({ success: true, message: 'Categoría eliminada' });
   } catch (error) {
     logger.error(`deleteCategoria: ${error.message}`);
-    // Error de foreign key — hay insumos que dependen de esta categoría
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
       return res.status(400).json({
         success: false,
-        message: 'No se puede eliminar: hay insumos que pertenecen a esta categoría. Primero reasignalos o eliminá los insumos.'
+        message: 'No se puede eliminar: hay insumos activos que pertenecen a esta categoría.'
       });
     }
     res.status(500).json({ success: false, message: error.message });
