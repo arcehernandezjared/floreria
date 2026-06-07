@@ -166,7 +166,7 @@ export default function NominaPage() {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-gray-800/50 rounded-xl p-3 text-center">
             <p className="text-lg font-bold text-white tabular-nums">{formatMoney(Math.round(promedioActual))}</p>
             <p className="text-xs text-gray-500 mt-0.5">Promedio/día</p>

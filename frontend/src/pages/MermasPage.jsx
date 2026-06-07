@@ -234,7 +234,7 @@ export default function MermasPage() {
               <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Pérdidas del Mes por Motivo</h3>
               <span className="text-red-400 font-bold">{formatMoney(totalMes)}</span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {mermasMes.map(m => (
                 <div key={m.motivo} className={`flex justify-between items-center p-3 rounded-xl border ${MOTIVO_COLORS[m.motivo] || 'text-gray-400 bg-gray-800 border-gray-700'}`}>
                   <div>

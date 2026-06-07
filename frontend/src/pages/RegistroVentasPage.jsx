@@ -489,7 +489,7 @@ export default function RegistroVentasPage() {
         </div>
 
         {ventas.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-800 bg-gray-800/30 flex justify-between items-center">
+          <div className="px-4 py-3 border-t border-gray-800 bg-gray-800/30 flex flex-wrap justify-between items-center gap-2">
             <p className="text-xs text-gray-600">{ventas.length} ventas mostradas (máx. 100)</p>
             <div className="flex gap-6 text-xs">
               <span className="text-gray-500">Mostrador: <span className="text-white font-medium">{ventas.filter(v => v.canal === 'mostrador').length}</span></span>

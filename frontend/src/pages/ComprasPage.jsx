@@ -59,8 +59,8 @@ function NuevaCompraModal({ onClose, onSave, proveedores, insumos, categorias })
               </button>
             </div>
 
-            {/* Cabecera de columnas */}
-            <div className="grid grid-cols-12 gap-2 mb-1 px-1">
+            {/* Cabecera de columnas — solo desktop */}
+            <div className="hidden sm:grid grid-cols-12 gap-2 mb-1 px-1">
               <div className="col-span-3 text-xs text-gray-600">Categoría</div>
               <div className="col-span-4 text-xs text-gray-600">Insumo</div>
               <div className="col-span-2 text-xs text-gray-600">Cantidad</div>
@@ -76,9 +76,10 @@ function NuevaCompraModal({ onClose, onSave, proveedores, insumos, categorias })
                 const catSeleccionada = categorias.find(c => String(c.id) === String(item._cat));
 
                 return (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                  <div key={idx} className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-center bg-gray-800/20 sm:bg-transparent rounded-xl sm:rounded-none p-2 sm:p-0">
                     {/* Categoría */}
-                    <div className="col-span-3">
+                    <div className="col-span-1 sm:col-span-3">
+                      <label className="sm:hidden text-xs text-gray-600 mb-0.5 block">Categoría</label>
                       <select className="input text-sm"
                         value={item._cat}
                         onChange={e => updateItem(idx, '_cat', e.target.value)}
@@ -90,7 +91,8 @@ function NuevaCompraModal({ onClose, onSave, proveedores, insumos, categorias })
                       </select>
                     </div>
                     {/* Insumo */}
-                    <div className="col-span-4">
+                    <div className="col-span-1 sm:col-span-4">
+                      <label className="sm:hidden text-xs text-gray-600 mb-0.5 block">Insumo</label>
                       <select className="input text-sm" value={item.insumo_id}
                         onChange={e => {
                           const ins = insumos.find(i => String(i.id) === e.target.value);
@@ -106,21 +108,23 @@ function NuevaCompraModal({ onClose, onSave, proveedores, insumos, categorias })
                       </select>
                     </div>
                     {/* Cantidad */}
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
+                      <label className="sm:hidden text-xs text-gray-600 mb-0.5 block">Cantidad</label>
                       <input className="input text-sm" type="number" step="0.01" placeholder="Cant."
                         value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value)} />
                     </div>
                     {/* Precio */}
-                    <div className="col-span-2">
+                    <div className="col-span-1 sm:col-span-2">
+                      <label className="sm:hidden text-xs text-gray-600 mb-0.5 block">Precio/u (₡)</label>
                       <input className="input text-sm" type="number" step="1" placeholder="₡/u"
                         value={item.costo_unitario} onChange={e => updateItem(idx, 'costo_unitario', e.target.value)} />
                     </div>
                     {/* Trash */}
-                    <div className="col-span-1 flex items-center justify-between">
-                      <span className="text-xs text-gray-600 tabular-nums hidden sm:block">
+                    <div className="col-span-2 sm:col-span-1 flex items-center justify-between sm:justify-end">
+                      <span className="text-xs text-gray-600 tabular-nums">
                         {item.cantidad && item.costo_unitario ? formatMoney(parseFloat(item.cantidad) * parseFloat(item.costo_unitario)) : ''}
                       </span>
-                      <button type="button" onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400 ml-auto">
+                      <button type="button" onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400">
                         <Trash2 size={13} />
                       </button>
                     </div>
@@ -182,40 +186,42 @@ export default function ComprasPage() {
       </div>
 
       <div className="card p-0 overflow-hidden">
-        <table className="w-full">
-          <thead className="border-b border-gray-800">
-            <tr>
-              <th className="th">#</th>
-              <th className="th">Proveedor</th>
-              <th className="th">Fecha</th>
-              <th className="th">Items</th>
-              <th className="th">Total</th>
-              <th className="th">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {compras.map(c => (
-              <tr key={c.id} className="table-row">
-                <td className="td text-gray-500">#{c.id}</td>
-                <td className="td">
-                  <p className="text-white">{c.proveedor_nombre}</p>
-                  {c.notas && <p className="text-xs text-gray-500 truncate max-w-32">{c.notas}</p>}
-                </td>
-                <td className="td text-gray-400">{formatDate(c.fecha)}</td>
-                <td className="td">{c.total_items} items</td>
-                <td className="td font-semibold text-white">{formatMoney(c.total)}</td>
-                <td className="td">
-                  <span className={`badge ${c.estado === 'recibida' ? 'badge-green' : c.estado === 'parcial' ? 'badge-yellow' : 'badge-blue'}`}>
-                    {c.estado}
-                  </span>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-b border-gray-800">
+              <tr>
+                <th className="th">#</th>
+                <th className="th">Proveedor</th>
+                <th className="th">Fecha</th>
+                <th className="th">Items</th>
+                <th className="th">Total</th>
+                <th className="th">Estado</th>
               </tr>
-            ))}
-            {compras.length === 0 && (
-              <tr><td colSpan={6} className="td text-center text-gray-600 py-8">Sin compras registradas</td></tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {compras.map(c => (
+                <tr key={c.id} className="table-row">
+                  <td className="td text-gray-500">#{c.id}</td>
+                  <td className="td">
+                    <p className="text-white">{c.proveedor_nombre}</p>
+                    {c.notas && <p className="text-xs text-gray-500 truncate max-w-32">{c.notas}</p>}
+                  </td>
+                  <td className="td text-gray-400">{formatDate(c.fecha)}</td>
+                  <td className="td">{c.total_items} items</td>
+                  <td className="td font-semibold text-white">{formatMoney(c.total)}</td>
+                  <td className="td">
+                    <span className={`badge ${c.estado === 'recibida' ? 'badge-green' : c.estado === 'parcial' ? 'badge-yellow' : 'badge-blue'}`}>
+                      {c.estado}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {compras.length === 0 && (
+                <tr><td colSpan={6} className="td text-center text-gray-600 py-8">Sin compras registradas</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <AnimatePresence>

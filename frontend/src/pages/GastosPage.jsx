@@ -183,57 +183,79 @@ export default function GastosPage() {
           </div>
 
           <div className="card p-0 overflow-hidden">
-            <table className="w-full">
-              <thead className="border-b border-gray-800">
-                <tr>
-                  <th className="th">Concepto</th>
-                  <th className="th">Categoría</th>
-                  <th className="th">Tipo</th>
-                  <th className="th">Fecha</th>
-                  <th className="th">Monto</th>
-                  <th className="th"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {gastos.map(g => (
-                  <tr key={g.id} className="table-row">
-                    <td className="td">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-white">{g.concepto}</p>
-                        {g.notas?.includes('WhatsApp') && (
-                          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-green-500/15 text-green-400 rounded-full">
-                            <MessageSquare size={9} /> WA
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex gap-1 mt-0.5 flex-wrap">
-                        {g.recurrente && <span className="badge badge-blue text-xs">Recurrente</span>}
-                        {g.notas && !g.notas.includes('WhatsApp') && <p className="text-xs text-gray-500">{g.notas}</p>}
-                      </div>
-                    </td>
-                    <td className="td"><span className="badge badge-yellow">{CAT_LABELS[g.categoria] || g.categoria}</span></td>
-                    <td className="td">
-                      <span className={`badge ${g.tipo === 'fijo' ? 'badge-purple' : 'badge-blue'}`}>{g.tipo}</span>
-                    </td>
-                    <td className="td text-gray-400">{formatDate(g.fecha)}</td>
-                    <td className="td font-semibold text-white">{formatMoney(g.monto)}</td>
-                    <td className="td">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setModal(g)} className="text-gray-600 hover:text-brand-400 transition-colors" title="Editar">
-                          <Pencil size={14} />
-                        </button>
-                        <button onClick={() => { if (confirm('¿Eliminar este gasto?')) deleteMut.mutate(g.id); }} className="text-gray-600 hover:text-red-400 transition-colors" title="Eliminar">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
+            {/* Mobile: tarjetas */}
+            <div className="sm:hidden divide-y divide-gray-800/60">
+              {gastos.map(g => (
+                <div key={g.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="min-w-0">
+                      <p className="text-white font-medium text-sm leading-tight truncate">{g.concepto}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{formatDate(g.fecha)}</p>
+                    </div>
+                    <p className="text-white font-bold text-sm whitespace-nowrap flex-shrink-0">{formatMoney(g.monto)}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-1 flex-wrap">
+                      <span className="badge badge-yellow text-xs">{CAT_LABELS[g.categoria] || g.categoria}</span>
+                      <span className={`badge text-xs ${g.tipo === 'fijo' ? 'badge-purple' : 'badge-blue'}`}>{g.tipo}</span>
+                      {g.recurrente && <span className="badge badge-blue text-xs">Recurrente</span>}
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button onClick={() => setModal(g)} className="text-gray-600 hover:text-brand-400 p-1"><Pencil size={14} /></button>
+                      <button onClick={() => { if (confirm('¿Eliminar este gasto?')) deleteMut.mutate(g.id); }} className="text-gray-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                  {g.notas && !g.notas.includes('WhatsApp') && <p className="text-xs text-gray-600 mt-1 truncate">{g.notas}</p>}
+                </div>
+              ))}
+              {gastos.length === 0 && <p className="text-gray-600 text-sm text-center py-8">Sin gastos para este período</p>}
+            </div>
+            {/* Desktop: tabla */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-gray-800">
+                  <tr>
+                    <th className="th">Concepto</th>
+                    <th className="th">Categoría</th>
+                    <th className="th">Tipo</th>
+                    <th className="th">Fecha</th>
+                    <th className="th">Monto</th>
+                    <th className="th"></th>
                   </tr>
-                ))}
-                {gastos.length === 0 && (
-                  <tr><td colSpan={6} className="td text-center text-gray-600 py-8">Sin gastos para este período</td></tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {gastos.map(g => (
+                    <tr key={g.id} className="table-row">
+                      <td className="td">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-white">{g.concepto}</p>
+                          {g.notas?.includes('WhatsApp') && (
+                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-green-500/15 text-green-400 rounded-full">
+                              <MessageSquare size={9} /> WA
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex gap-1 mt-0.5 flex-wrap">
+                          {g.recurrente && <span className="badge badge-blue text-xs">Recurrente</span>}
+                          {g.notas && !g.notas.includes('WhatsApp') && <p className="text-xs text-gray-500">{g.notas}</p>}
+                        </div>
+                      </td>
+                      <td className="td"><span className="badge badge-yellow">{CAT_LABELS[g.categoria] || g.categoria}</span></td>
+                      <td className="td"><span className={`badge ${g.tipo === 'fijo' ? 'badge-purple' : 'badge-blue'}`}>{g.tipo}</span></td>
+                      <td className="td text-gray-400">{formatDate(g.fecha)}</td>
+                      <td className="td font-semibold text-white">{formatMoney(g.monto)}</td>
+                      <td className="td">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setModal(g)} className="text-gray-600 hover:text-brand-400 transition-colors"><Pencil size={14} /></button>
+                          <button onClick={() => { if (confirm('¿Eliminar este gasto?')) deleteMut.mutate(g.id); }} className="text-gray-600 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {gastos.length === 0 && <tr><td colSpan={6} className="td text-center text-gray-600 py-8">Sin gastos para este período</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

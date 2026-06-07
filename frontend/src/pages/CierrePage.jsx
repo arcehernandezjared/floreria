@@ -267,7 +267,7 @@ export default function CierrePage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="label">Efectivo en caja (₡)</label>
               <input type="number" min="0" step="500" className="input"

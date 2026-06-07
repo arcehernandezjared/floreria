@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingBag, Trash2, TrendingUp, DollarSign,
-  AlertTriangle, Package, RotateCcw, Wallet,
-  CheckCircle, Smile, TrendingDown, ClipboardList
+  Package, RotateCcw, Wallet,
+  CheckCircle, TrendingDown, ClipboardList
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Line, Doughnut } from 'react-chartjs-2';
@@ -290,7 +290,7 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mt-5 pt-4 border-t border-gray-800">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-4 border-t border-gray-800">
             <div>
               <p className="text-sm text-gray-500 mb-1">Ya ahorrado</p>
               <p className="text-xl font-bold text-white tabular-nums">{formatMoney(term.acumulado_periodo)}</p>
@@ -412,94 +412,53 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Alertas ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-        {/* Inventario bajo */}
-        <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <Package size={16} className="text-gray-500" />
-            <h3 className="text-base font-bold text-white">Materiales que se están acabando</h3>
-            {(dash?.stock_bajo?.length || 0) > 0 && (
-              <span className="ml-auto badge badge-yellow text-sm">{dash.stock_bajo.length} alertas</span>
-            )}
-          </div>
-
-          {(dash?.stock_bajo?.length || 0) === 0 ? (
-            <div className="flex items-center gap-3 text-green-400">
-              <CheckCircle size={20} />
-              <p className="text-sm font-medium">Todo el inventario está bien abastecido</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {dash.stock_bajo.slice(0, 6).map(item => {
-                const ratio = item.stock_minimo > 0
-                  ? Math.min(100, (parseFloat(item.stock_actual) / parseFloat(item.stock_minimo)) * 100)
-                  : 100;
-                const isEmpty = parseFloat(item.stock_actual) === 0;
-                return (
-                  <div key={item.id}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{item.nombre}</p>
-                        <p className="text-xs text-gray-500">{item.categoria_nombre}</p>
-                      </div>
-                      <div className="text-right ml-3 flex-shrink-0">
-                        <p className={`text-sm font-bold tabular-nums ${isEmpty ? 'text-red-400' : 'text-yellow-400'}`}>
-                          {parseFloat(item.stock_actual)} {item.unidad}
-                        </p>
-                        <p className="text-xs text-gray-600">mínimo: {item.stock_minimo}</p>
-                      </div>
-                    </div>
-                    <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${isEmpty ? 'bg-red-500' : 'bg-yellow-500'}`}
-                        style={{ width: `${Math.max(3, ratio)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+      {/* ── Alertas inventario ── */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-4">
+          <Package size={16} className="text-gray-500" />
+          <h3 className="text-base font-bold text-white">Materiales que se están acabando</h3>
+          {(dash?.stock_bajo?.length || 0) > 0 && (
+            <span className="ml-auto badge badge-yellow text-sm">{dash.stock_bajo.length} alertas</span>
           )}
         </div>
 
-        {/* Arreglos con ganancia baja */}
-        <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle size={16} className="text-gray-500" />
-            <h3 className="text-base font-bold text-white">Arreglos que ganan poco</h3>
-            {(dash?.alertas_margen?.length || 0) > 0 && (
-              <span className="ml-auto badge badge-yellow text-sm">{dash.alertas_margen.length} alertas</span>
-            )}
+        {(dash?.stock_bajo?.length || 0) === 0 ? (
+          <div className="flex items-center gap-3 text-green-400">
+            <CheckCircle size={20} />
+            <p className="text-sm font-medium">Todo el inventario está bien abastecido</p>
           </div>
-
-          {(dash?.alertas_margen?.length || 0) === 0 ? (
-            <div className="flex items-center gap-3 text-green-400">
-              <CheckCircle size={20} />
-              <p className="text-sm font-medium">Todos los arreglos tienen buena ganancia</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {dash.alertas_margen.map(a => (
-                <div key={a.id} className="flex items-start gap-3 p-3 bg-red-500/5 border border-red-500/15 rounded-xl">
-                  <div className="w-8 h-8 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <AlertTriangle size={13} className="text-red-400" />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {dash.stock_bajo.slice(0, 6).map(item => {
+              const ratio = item.stock_minimo > 0
+                ? Math.min(100, (parseFloat(item.stock_actual) / parseFloat(item.stock_minimo)) * 100)
+                : 100;
+              const isEmpty = parseFloat(item.stock_actual) === 0;
+              return (
+                <div key={item.id}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{item.nombre}</p>
+                      <p className="text-xs text-gray-500">{item.categoria_nombre}</p>
+                    </div>
+                    <div className="text-right ml-3 flex-shrink-0">
+                      <p className={`text-sm font-bold tabular-nums ${isEmpty ? 'text-red-400' : 'text-yellow-400'}`}>
+                        {parseFloat(item.stock_actual)} {item.unidad}
+                      </p>
+                      <p className="text-xs text-gray-600">mínimo: {item.stock_minimo}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-white truncate">{a.nombre}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Ganancia actual: <span className="text-red-400 font-bold">{a.margen_real?.toFixed(1)}%</span>
-                      <span className="text-gray-600 mx-1">·</span>
-                      mínima esperada: <span className="text-gray-300">{a.margen_minimo}%</span>
-                    </p>
+                  <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${isEmpty ? 'bg-red-500' : 'bg-yellow-500'}`}
+                      style={{ width: `${Math.max(3, ratio)}%` }}
+                    />
                   </div>
-                  <p className="text-sm text-gray-300 font-semibold tabular-nums flex-shrink-0">{formatMoney(a.precio_venta)}</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Pérdidas de esta semana ── */}

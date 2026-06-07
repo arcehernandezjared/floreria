@@ -28,16 +28,16 @@ const TERMINOS_DEFAULT = `• Precios en Colones costarricenses (₡), incluyen 
 function ItemRow({ item, idx, onChange, onRemove }) {
   const subtotal = (parseFloat(item.cantidad || 0) * parseFloat(item.precio_unitario || 0));
   return (
-    <div className="grid grid-cols-12 gap-2 items-center">
+    <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 items-center bg-gray-800/20 sm:bg-transparent rounded-xl sm:rounded-none p-2 sm:p-0">
       <input
-        className="input text-sm col-span-5"
+        className="input text-sm col-span-2 sm:col-span-5"
         placeholder="Descripción del servicio/producto"
         value={item.descripcion}
         onChange={e => onChange(idx, 'descripcion', e.target.value)}
       />
       <input
         type="number" min="1"
-        className="input text-sm col-span-2 text-center"
+        className="input text-sm col-span-1 sm:col-span-2 text-center"
         placeholder="Cant."
         value={item.cantidad}
         onChange={e => {
@@ -49,7 +49,7 @@ function ItemRow({ item, idx, onChange, onRemove }) {
       />
       <input
         type="number" min="0"
-        className="input text-sm col-span-2 text-right"
+        className="input text-sm col-span-1 sm:col-span-2 text-right"
         placeholder="Precio"
         value={item.precio_unitario}
         onChange={e => {
@@ -59,10 +59,10 @@ function ItemRow({ item, idx, onChange, onRemove }) {
           onChange(idx, 'subtotal', sub);
         }}
       />
-      <div className="col-span-2 text-right text-emerald-400 font-semibold text-sm">
+      <div className="col-span-1 sm:col-span-2 text-right text-emerald-400 font-semibold text-sm">
         {formatMoney(subtotal)}
       </div>
-      <button onClick={() => onRemove(idx)} className="col-span-1 text-gray-600 hover:text-red-400 transition-colors flex justify-center">
+      <button onClick={() => onRemove(idx)} className="col-span-1 sm:col-span-1 text-gray-600 hover:text-red-400 transition-colors flex justify-end sm:justify-center">
         <X size={14} />
       </button>
     </div>
@@ -256,8 +256,8 @@ function ModalForm({ inicial, onClose, onSaved }) {
           {/* Datos del cliente */}
           <div>
             <p className="text-xs text-purple-400 font-semibold uppercase tracking-wider mb-3">Datos del cliente</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-3 sm:col-span-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
                 <label className="text-xs text-gray-500 block mb-1">Nombre *</label>
                 <div className="relative">
                   <User size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -287,7 +287,7 @@ function ModalForm({ inicial, onClose, onSaved }) {
           {/* Datos del evento */}
           <div>
             <p className="text-xs text-purple-400 font-semibold uppercase tracking-wider mb-3">Datos del evento</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-gray-500 block mb-1">Tipo de evento</label>
                 <select className="input w-full text-sm" value={form.tipo_evento} onChange={e => setF('tipo_evento', e.target.value)}>
@@ -320,7 +320,7 @@ function ModalForm({ inicial, onClose, onSaved }) {
               </button>
             </div>
             <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-2 text-xs text-gray-600 px-0 mb-1">
+              <div className="hidden sm:grid grid-cols-12 gap-2 text-xs text-gray-600 px-0 mb-1">
                 <span className="col-span-5">Descripción</span>
                 <span className="col-span-2 text-center">Cant.</span>
                 <span className="col-span-2 text-right">Precio unit.</span>
@@ -355,7 +355,7 @@ function ModalForm({ inicial, onClose, onSaved }) {
           </div>
 
           {/* Notas y términos */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-gray-500 block mb-1">Notas adicionales</label>
               <textarea rows={3} className="input w-full text-sm resize-none" placeholder="Observaciones, acuerdos especiales..."
@@ -458,7 +458,7 @@ export default function CotizacionesPage() {
       </div>
 
       {/* Resumen */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card">
           <p className="text-xs text-gray-500 mb-1">Total cotizaciones</p>
           <p className="text-2xl font-bold text-white">{cotizaciones.length}</p>
@@ -477,6 +477,7 @@ export default function CotizacionesPage() {
 
       {/* Tabla */}
       <div className="card p-0 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800 bg-gray-800/50">
@@ -547,6 +548,7 @@ export default function CotizacionesPage() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Modal */}

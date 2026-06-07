@@ -801,10 +801,10 @@ export default function ReportesPage() {
           </div>
 
           {isCustom && (
-            <div className="flex items-center gap-2">
-              <input type="date" className="input py-1.5 text-sm w-36" value={customDesde} onChange={e => setCustomDesde(e.target.value)} />
+            <div className="flex flex-wrap items-center gap-2">
+              <input type="date" className="input py-1.5 text-sm" value={customDesde} onChange={e => setCustomDesde(e.target.value)} />
               <span className="text-gray-600 text-sm">—</span>
-              <input type="date" className="input py-1.5 text-sm w-36" value={customHasta} onChange={e => setCustomHasta(e.target.value)} />
+              <input type="date" className="input py-1.5 text-sm" value={customHasta} onChange={e => setCustomHasta(e.target.value)} />
             </div>
           )}
 
@@ -818,7 +818,8 @@ export default function ReportesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-2xl p-1 w-fit">
+      <div className="overflow-x-auto -mx-1 px-1 pb-0.5">
+      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-2xl p-1 w-fit min-w-max">
         {TABS.map(t => {
           const Icon = t.icon;
           return (
@@ -836,6 +837,7 @@ export default function ReportesPage() {
             </button>
           );
         })}
+      </div>
       </div>
 
       {/* Período info */}

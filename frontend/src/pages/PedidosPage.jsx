@@ -382,6 +382,7 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
             {/* Lista de items agregados */}
             {items.length > 0 && (
               <div className="rounded-xl border border-gray-800 overflow-hidden">
+                <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-800 bg-gray-900/50">
@@ -449,6 +450,7 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
                     </tr>
                   </tfoot>
                 </table>
+                </div>
               </div>
             )}
 
@@ -477,7 +479,7 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
           {/* ── Pago ── */}
           <div className="bg-gray-800/50 rounded-xl p-4 space-y-3">
             <h4 className="text-sm font-semibold text-white">Pago</h4>
-            <div className="grid grid-cols-3 gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
               <div>
                 <label className="label">Total ₡</label>
                 <div className="relative">
@@ -754,18 +756,20 @@ export default function PedidosPage() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input className="input pl-9 w-56 text-sm" placeholder="Buscar cliente o número..."
+          <input className="input pl-9 w-full sm:w-56 text-sm" placeholder="Buscar cliente o número..."
             value={busqueda} onChange={e => setBusqueda(e.target.value)} />
         </div>
-        <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1">
-          {[['todos', 'Todos'], ...Object.entries(ESTADO).map(([k, v]) => [k, v.label])].map(([key, label]) => (
-            <button key={key} onClick={() => setFiltroEstado(key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                filtroEstado === key ? 'bg-brand-600/20 text-brand-400 border border-brand-600/30' : 'text-gray-400 hover:text-white'
-              }`}>
-              {label} {conteos[key] > 0 && <span className="ml-1 opacity-60">{conteos[key]}</span>}
-            </button>
-          ))}
+        <div className="overflow-x-auto -mx-1 px-1">
+          <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit min-w-max">
+            {[['todos', 'Todos'], ...Object.entries(ESTADO).map(([k, v]) => [k, v.label])].map(([key, label]) => (
+              <button key={key} onClick={() => setFiltroEstado(key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  filtroEstado === key ? 'bg-brand-600/20 text-brand-400 border border-brand-600/30' : 'text-gray-400 hover:text-white'
+                }`}>
+                {label} {conteos[key] > 0 && <span className="ml-1 opacity-60">{conteos[key]}</span>}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
