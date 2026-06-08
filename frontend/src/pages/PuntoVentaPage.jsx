@@ -37,69 +37,111 @@ function fmtCRC(n) {
 
 function generarReciboPOS(snap) {
   const { numero, items, cliente, canal, descuento, subtotal, descuentoMonto, total, fecha } = snap;
-  const doc  = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
-  const W    = doc.internal.pageSize.getWidth();
-  const H    = doc.internal.pageSize.getHeight();
+  const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
   const canalLabel = CANALES.find(c => c.value === canal)?.label || canal;
 
-  // ── Header ──────────────────────────────────────────────────────────────
-  doc.setFillColor(212, 0, 110);
-  doc.rect(0, 0, W, 30, 'F');
-  doc.setFillColor(240, 117, 37);
-  doc.triangle(W * 0.4, 0, W, 0, W, 30, 'F');
+  // ── Paleta ──────────────────────────────────────────────────────────────
+  const ROSE    = [156, 0, 70];
+  const ROSEMID = [212, 0, 110];
+  const ROSELIT = [253, 243, 249];
+  const DARK    = [20, 20, 20];
+  const GRAY    = [110, 110, 110];
+  const WHITE   = [255, 255, 255];
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
+  // ── Barra de acento superior ─────────────────────────────────────────────
+  doc.setFillColor(...ROSEMID);
+  doc.rect(0, 0, W, 4, 'F');
+
+  // ── Header blanco ────────────────────────────────────────────────────────
+  // Icono floral (6 pétalos + centro)
+  const fx = 18, fy = 22;
+  doc.setFillColor(...ROSEMID);
+  [0, 60, 120, 180, 240, 300].forEach(a => {
+    const r = a * Math.PI / 180;
+    doc.circle(fx + Math.cos(r) * 3.8, fy + Math.sin(r) * 3.8, 2.3, 'F');
+  });
+  doc.setFillColor(255, 180, 220);
+  doc.circle(fx, fy, 2.1, 'F');
+
+  // Nombre y datos del negocio
+  doc.setTextColor(...ROSE);
+  doc.setFontSize(17);
   doc.setFont('helvetica', 'bold');
-  doc.text('Floristeria Alma Caribeña', W / 2, 13, { align: 'center' });
-  doc.setFontSize(8);
+  doc.text('Floristeria Alma Caribe\xF1a', 30, 18);
+  doc.setTextColor(...GRAY);
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.text('Flores con alma  |  Recibo de Compra', W / 2, 21, { align: 'center' });
+  doc.text('Siquirres, Lim\xF3n, Costa Rica  |  Flores con alma', 30, 25);
+  doc.text('WhatsApp / Instagram: @almacaribe\xF1a', 30, 31);
 
-  // ── Número + fecha ───────────────────────────────────────────────────────
-  doc.setFillColor(255, 248, 251);
-  doc.rect(0, 30, W, 22, 'F');
+  // Separador elegante con puntos
+  doc.setDrawColor(...ROSEMID);
+  doc.setLineWidth(0.6);
+  doc.line(12, 40, W - 12, 40);
+  doc.setFillColor(...ROSEMID);
+  doc.circle(12, 40, 1, 'F');
+  doc.circle(W - 12, 40, 1, 'F');
 
-  doc.setTextColor(212, 0, 110);
-  doc.setFontSize(7);
+  // ── Tipo de comprobante ──────────────────────────────────────────────────
+  doc.setTextColor(...GRAY);
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
-  doc.text('RECIBO No.', 14, 38);
-  doc.setTextColor(30, 30, 30);
-  doc.setFontSize(14);
-  doc.text(numero, 14, 46);
+  doc.text('RECIBO DE COMPRA', W / 2, 49, { align: 'center' });
 
-  doc.setTextColor(130, 130, 130);
-  doc.setFontSize(7);
+  // Número a la izquierda
+  doc.setTextColor(...GRAY);
+  doc.setFontSize(6.5);
   doc.setFont('helvetica', 'normal');
-  doc.text('FECHA', W - 14, 38, { align: 'right' });
-  doc.setTextColor(50, 50, 50);
+  doc.text('N\xBA', 14, 57);
+  doc.setTextColor(...DARK);
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.text(fecha, W - 14, 44, { align: 'right' });
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(130, 130, 130);
-  doc.setFontSize(7);
-  doc.text(canalLabel, W - 14, 50, { align: 'right' });
+  doc.text(numero, 14, 65);
 
-  doc.setDrawColor(240, 210, 225);
-  doc.setLineWidth(0.4);
-  doc.line(12, 54, W - 12, 54);
+  // Fecha y canal a la derecha
+  doc.setTextColor(...GRAY);
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('FECHA', W - 14, 57, { align: 'right' });
+  doc.setTextColor(...DARK);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text(fecha, W - 14, 64, { align: 'right' });
+  doc.setTextColor(...GRAY);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(canalLabel, W - 14, 70, { align: 'right' });
+
+  // Separador suave
+  doc.setDrawColor(230, 205, 220);
+  doc.setLineWidth(0.25);
+  doc.line(12, 74, W - 12, 74);
 
   // ── Cliente ──────────────────────────────────────────────────────────────
-  let y = 62;
-  doc.setTextColor(200, 0, 100);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'bold');
-  doc.text('PARA', 14, y - 3);
-  doc.setTextColor(20, 20, 20);
-  doc.setFontSize(12);
-  doc.text(cliente, 14, y + 3);
-  doc.setDrawColor(245, 220, 230);
-  doc.setLineWidth(0.3);
-  doc.line(12, y + 7, W - 12, y + 7);
+  let y;
+  const clienteLabel = cliente && cliente !== 'Cliente mostrador' ? cliente : null;
+  if (clienteLabel) {
+    doc.setFillColor(...ROSELIT);
+    doc.roundedRect(12, 77, W - 24, 13, 1.5, 1.5, 'F');
+    doc.setDrawColor(225, 195, 215);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(12, 77, W - 24, 13, 1.5, 1.5, 'D');
+    doc.setTextColor(...ROSE);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CLIENTE', 17, 83);
+    doc.setTextColor(...DARK);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(clienteLabel, 17, 88);
+    y = 96;
+  } else {
+    y = 80;
+  }
 
-  // ── Tabla items ──────────────────────────────────────────────────────────
-  y += 14;
+  // ── Tabla de productos ────────────────────────────────────────────────────
   const tableData = items.map(i => {
     const precio = i.tipo === 'insumo' ? i.precio_unitario : i.precio_venta;
     return [
@@ -112,73 +154,85 @@ function generarReciboPOS(snap) {
 
   autoTable(doc, {
     startY: y,
-    head: [['Producto / Servicio', 'Cant.', 'Precio', 'Total']],
+    head: [['Descripci\xF3n', 'Cant.', 'Precio', 'Total']],
     body: tableData,
     theme: 'plain',
     styles: {
-      fontSize: 8,
-      cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
-      textColor: [40, 40, 40],
+      fontSize: 8.5,
+      cellPadding: { top: 5, bottom: 5, left: 4, right: 4 },
+      textColor: [...DARK],
+      lineColor: [230, 205, 220],
+      lineWidth: 0.25,
     },
     headStyles: {
-      fillColor: [26, 138, 122],
-      textColor: [255, 255, 255],
+      fillColor: [...ROSE],
+      textColor: [...WHITE],
       fontStyle: 'bold',
-      fontSize: 7,
-      cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+      fontSize: 7.5,
+      cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
     },
-    alternateRowStyles: { fillColor: [255, 250, 252] },
+    alternateRowStyles: { fillColor: [...ROSELIT] },
     columnStyles: {
       0: { cellWidth: 'auto' },
-      1: { cellWidth: 14, halign: 'center' },
+      1: { cellWidth: 13, halign: 'center' },
       2: { cellWidth: 30, halign: 'right' },
-      3: { cellWidth: 30, halign: 'right', fontStyle: 'bold', textColor: [26, 138, 122] },
+      3: { cellWidth: 30, halign: 'right', fontStyle: 'bold', textColor: [...ROSE] },
     },
-    tableLineColor: [240, 210, 225],
-    tableLineWidth: 0.3,
     margin: { left: 12, right: 12 },
   });
 
-  y = doc.lastAutoTable.finalY + 5;
+  y = doc.lastAutoTable.finalY + 8;
 
-  // ── Totales ──────────────────────────────────────────────────────────────
+  // ── Subtotal, descuento y total ───────────────────────────────────────────
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(130, 130, 130);
-  doc.text('Subtotal:', W - 52, y + 4);
-  doc.setTextColor(50, 50, 50);
-  doc.text(fmtCRC(subtotal), W - 14, y + 4, { align: 'right' });
+  doc.setTextColor(...GRAY);
+  doc.text('Subtotal:', W - 50, y);
+  doc.setTextColor(...DARK);
+  doc.text(fmtCRC(subtotal), W - 14, y, { align: 'right' });
 
   if (descuento > 0) {
     y += 7;
-    doc.setTextColor(220, 60, 60);
-    doc.text(`Descuento (${descuento}%):`, W - 60, y + 4);
-    doc.text(`- ${fmtCRC(descuentoMonto)}`, W - 14, y + 4, { align: 'right' });
+    doc.setTextColor(200, 50, 50);
+    doc.text(`Descuento (${descuento}%):`, W - 60, y);
+    doc.text(`- ${fmtCRC(descuentoMonto)}`, W - 14, y, { align: 'right' });
   }
 
-  y += 10;
-  doc.setFillColor(212, 0, 110);
-  doc.roundedRect(W - 76, y - 2, 64, 13, 3, 3, 'F');
-  doc.setFillColor(240, 117, 37);
-  doc.roundedRect(W - 44, y - 2, 32, 13, 3, 3, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('TOTAL', W - 70, y + 7);
-  doc.text(fmtCRC(total), W - 15, y + 7, { align: 'right' });
+  y += 6;
+  doc.setDrawColor(220, 195, 210);
+  doc.setLineWidth(0.25);
+  doc.line(W - 64, y, W - 12, y);
 
-  // ── Footer ───────────────────────────────────────────────────────────────
-  doc.setFillColor(212, 0, 110);
-  doc.rect(0, H - 18, W, 18, 'F');
-  doc.setFillColor(240, 117, 37);
-  doc.triangle(W * 0.55, H - 18, W, H - 18, W, H, 'F');
-  doc.setTextColor(255, 255, 255);
+  y += 5;
+  // Caja TOTAL — elegante, ancho completo
+  doc.setFillColor(...ROSE);
+  doc.roundedRect(12, y, W - 24, 14, 2, 2, 'F');
+  doc.setTextColor(...WHITE);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Gracias por su compra!', W / 2, H - 10, { align: 'center' });
+  doc.setFontSize(8.5);
+  doc.text('TOTAL A PAGAR', 18, y + 9);
+  doc.setFontSize(11);
+  doc.text(fmtCRC(total), W - 17, y + 9, { align: 'right' });
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  doc.setFillColor(...ROSELIT);
+  doc.rect(0, H - 28, W, 28, 'F');
+  doc.setDrawColor(...ROSEMID);
+  doc.setLineWidth(0.5);
+  doc.line(12, H - 28, W - 12, H - 28);
+  doc.setFillColor(...ROSEMID);
+  doc.circle(12, H - 28, 0.9, 'F');
+  doc.circle(W - 12, H - 28, 0.9, 'F');
+
+  doc.setTextColor(...ROSE);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text('\xA1Gracias por su preferencia!', W / 2, H - 18, { align: 'center' });
+  doc.setTextColor(...GRAY);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
-  doc.text('Floristeria Alma Caribeña  ·  Flores con alma', W / 2, H - 4, { align: 'center' });
+  doc.text('Siquirres, Lim\xF3n, Costa Rica', W / 2, H - 12, { align: 'center' });
+  doc.text('Floristeria Alma Caribe\xF1a  |  Flores con alma', W / 2, H - 6, { align: 'center' });
 
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
