@@ -648,8 +648,22 @@ export default function PuntoVentaPage() {
 
   const cambiarCantidad = (key, delta) => {
     setCarrito(prev => prev
-      .map(i => i._key === key ? { ...i, cantidad: Math.max(0, i.cantidad + delta) } : i)
+      .map(i => i._key === key ? { ...i, cantidad: Math.max(0, Math.round((i.cantidad + delta) * 10000) / 10000) } : i)
       .filter(i => i.cantidad > 0));
+  };
+
+  const setCantidadDirecta = (key, valor) => {
+    const v = parseFloat(valor);
+    if (!isNaN(v) && v > 0) {
+      setCarrito(prev => prev.map(i => i._key === key ? { ...i, cantidad: v } : i));
+    } else if (valor === '' || valor === '0') {
+      setCarrito(prev => prev.map(i => i._key === key ? { ...i, cantidad: valor } : i));
+    }
+  };
+
+  const confirmarCantidad = (key, valor) => {
+    const v = parseFloat(valor);
+    if (isNaN(v) || v <= 0) setCarrito(prev => prev.filter(i => i._key !== key));
   };
 
   const cambiarPrecioInsumo = (key, valor) => {
@@ -940,7 +954,7 @@ export default function PuntoVentaPage() {
             <ShoppingCart size={15} /> Carrito
             {carrito.length > 0 && (
               <span className="bg-white/20 text-white text-xs font-bold px-1.5 py-0.5 rounded-full leading-none">
-                {carrito.reduce((s, i) => s + i.cantidad, 0)}
+                {carrito.length}
               </span>
             )}
           </button>
@@ -952,7 +966,7 @@ export default function PuntoVentaPage() {
             <h2 className="font-semibold text-white">Carrito</h2>
             {carrito.length > 0 && (
               <span className="ml-auto bg-brand-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                {carrito.reduce((s, i) => s + i.cantidad, 0)}
+                {carrito.length}
               </span>
             )}
           </div>
@@ -990,12 +1004,23 @@ export default function PuntoVentaPage() {
                     )}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => cambiarCantidad(item._key, -1)}
+                        <button onClick={() => cambiarCantidad(item._key, item.tipo === 'insumo' ? -0.25 : -1)}
                           className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors">
                           <Minus size={11} />
                         </button>
-                        <span className="text-white font-bold text-sm w-4 text-center">{item.cantidad}</span>
-                        <button onClick={() => cambiarCantidad(item._key, 1)}
+                        {item.tipo === 'insumo' ? (
+                          <input
+                            type="number" min="0.01" step="0.01"
+                            value={item.cantidad}
+                            onChange={e => setCantidadDirecta(item._key, e.target.value)}
+                            onBlur={e => confirmarCantidad(item._key, e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            className="input py-0.5 text-center text-white font-bold text-sm w-16"
+                          />
+                        ) : (
+                          <span className="text-white font-bold text-sm w-4 text-center">{item.cantidad}</span>
+                        )}
+                        <button onClick={() => cambiarCantidad(item._key, item.tipo === 'insumo' ? 0.25 : 1)}
                           className="w-6 h-6 rounded-full bg-brand-600 hover:bg-brand-500 flex items-center justify-center transition-colors">
                           <Plus size={11} />
                         </button>
