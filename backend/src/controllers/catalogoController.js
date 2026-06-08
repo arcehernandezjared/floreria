@@ -277,10 +277,10 @@ async function getVentas(req, res) {
       WHERE 1=1
     `;
     const params = [];
-    if (desde) { sql += ' AND DATE(v.fecha) >= ?'; params.push(desde); }
-    if (hasta) { sql += ' AND DATE(v.fecha) <= ?'; params.push(hasta); }
+    if (desde) { sql += " AND DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) >= ?"; params.push(desde); }
+    if (hasta) { sql += " AND DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) <= ?"; params.push(hasta); }
     if (canal) { sql += ' AND v.canal = ?'; params.push(canal); }
-    sql += ' ORDER BY v.fecha DESC LIMIT 100';
+    sql += ' ORDER BY v.fecha DESC LIMIT 500';
 
     const ventas = await query(sql, params);
     res.json({ success: true, data: ventas });
