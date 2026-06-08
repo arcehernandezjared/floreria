@@ -557,7 +557,7 @@ export default function PuntoVentaPage() {
       });
       if (insumoItems.length > 0) {
         promises.push(api.post('/insumos/venta-directa', {
-          items: insumoItems.map(i => ({ insumo_id: i.id, cantidad: i.cantidad, precio_unitario: i.precio_unitario })),
+          items: insumoItems.map(i => ({ insumo_id: i.id, cantidad: Math.round(i.cantidad * 10000) / 10000, precio_unitario: i.precio_unitario })),
           nombre_cliente: cliente || 'Cliente mostrador',
           canal,
           descuento,
@@ -1004,26 +1004,29 @@ export default function PuntoVentaPage() {
                     )}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => cambiarCantidad(item._key, item.tipo === 'insumo' ? -0.25 : -1)}
-                          className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors">
-                          <Minus size={11} />
-                        </button>
                         {item.tipo === 'insumo' ? (
-                          <input
-                            type="number" min="0.01" step="0.01"
-                            value={item.cantidad}
-                            onChange={e => setCantidadDirecta(item._key, e.target.value)}
-                            onBlur={e => confirmarCantidad(item._key, e.target.value)}
-                            onClick={e => e.stopPropagation()}
-                            className="input py-0.5 text-center text-white font-bold text-sm w-16"
-                          />
+                          <div className="flex gap-1">
+                            {[{ label: 'Entero', val: 1 }, { label: '½', val: 0.5 }, { label: '⅓', val: 1/3 }].map(({ label, val }) => (
+                              <button key={label}
+                                onClick={() => setCarrito(prev => prev.map(i => i._key === item._key ? { ...i, cantidad: val } : i))}
+                                className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-colors ${Math.abs(item.cantidad - val) < 0.01 ? 'bg-brand-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                                {label}
+                              </button>
+                            ))}
+                          </div>
                         ) : (
-                          <span className="text-white font-bold text-sm w-4 text-center">{item.cantidad}</span>
+                          <>
+                            <button onClick={() => cambiarCantidad(item._key, -1)}
+                              className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors">
+                              <Minus size={11} />
+                            </button>
+                            <span className="text-white font-bold text-sm w-4 text-center">{item.cantidad}</span>
+                            <button onClick={() => cambiarCantidad(item._key, 1)}
+                              className="w-6 h-6 rounded-full bg-brand-600 hover:bg-brand-500 flex items-center justify-center transition-colors">
+                              <Plus size={11} />
+                            </button>
+                          </>
                         )}
-                        <button onClick={() => cambiarCantidad(item._key, item.tipo === 'insumo' ? 0.25 : 1)}
-                          className="w-6 h-6 rounded-full bg-brand-600 hover:bg-brand-500 flex items-center justify-center transition-colors">
-                          <Plus size={11} />
-                        </button>
                       </div>
                       <span className="text-brand-400 font-semibold text-sm">
                         {formatMoney((item.tipo === 'insumo' ? item.precio_unitario : item.precio_venta) * item.cantidad)}

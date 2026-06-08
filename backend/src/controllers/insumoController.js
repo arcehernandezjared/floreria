@@ -229,6 +229,14 @@ async function getHistorialCostos(req, res) {
   }
 }
 
+function fmtCantidad(n) {
+  const v = parseFloat(n);
+  if (Math.abs(v - 1) < 0.01) return '1';
+  if (Math.abs(v - 0.5) < 0.01) return '\xBD';
+  if (Math.abs(v - 1 / 3) < 0.02) return '⅓';
+  return parseFloat(v.toFixed(2)).toString();
+}
+
 async function ventaDirecta(req, res) {
   try {
     const { items, nombre_cliente, canal, descuento = 0 } = req.body;
@@ -261,7 +269,7 @@ async function ventaDirecta(req, res) {
         `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente)
          VALUES (NULL, ?, ?, ?, ?, ?)`,
         [
-          `${insumo.nombre} ×${cantidad} ${insumo.unidad}`,
+          `${insumo.nombre} \xD7${fmtCantidad(cantidad)} ${insumo.unidad}`,
           canal || 'mostrador',
           precioTotal,
           costoTotal,
