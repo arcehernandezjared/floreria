@@ -380,4 +380,34 @@ async function ventaPersonalizada(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, getVentas, uploadImagen, ventaPersonalizada };
+async function revertirVenta(req, res) {
+  try {
+    const { id } = req.params;
+    const venta = await queryOne('SELECT * FROM ventas_floreria WHERE id = ?', [id]);
+    if (!venta) return res.status(404).json({ success: false, message: 'Venta no encontrada' });
+
+    await transaction(async (conn) => {
+      if (venta.catalogo_id) {
+        const ingredientes = await query(
+          'SELECT insumo_id, cantidad FROM ficha_ingredientes WHERE catalogo_id = ?',
+          [venta.catalogo_id]
+        );
+        for (const ing of ingredientes) {
+          await conn.query(
+            'UPDATE insumos SET stock_actual = stock_actual + ? WHERE id = ?',
+            [ing.cantidad, ing.insumo_id]
+          );
+        }
+      }
+      await conn.query('DELETE FROM ventas_floreria WHERE id = ?', [id]);
+    });
+
+    logger.info(`revertirVenta: venta #${id} eliminada — ₡${venta.precio_venta}`);
+    res.json({ success: true, message: 'Venta revertida correctamente' });
+  } catch (error) {
+    logger.error(`revertirVenta: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, getVentas, uploadImagen, ventaPersonalizada, revertirVenta };

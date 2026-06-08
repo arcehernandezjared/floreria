@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, ShoppingBag, Filter,
-  MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send, Plus
+  MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send, Plus, RotateCcw
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -368,6 +368,7 @@ export default function RegistroVentasPage() {
   const [canal, setCanal]         = useState('todos');
   const [modalEmail, setModalEmail] = useState(null);
   const [modalManual, setModalManual] = useState(false);
+  const [confirmRevertir, setConfirmRevertir] = useState(null);
 
   const params = new URLSearchParams({ desde, hasta });
   if (canal !== 'todos') params.set('canal', canal);
@@ -375,6 +376,17 @@ export default function RegistroVentasPage() {
   const { data: ventas = [], isLoading } = useQuery({
     queryKey: ['registro-ventas', desde, hasta, canal],
     queryFn: () => api.get(`/catalogo/ventas?${params}`).then(r => r.data.data),
+  });
+
+  const revertirMut = useMutation({
+    mutationFn: (id) => api.delete(`/catalogo/ventas/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries(['registro-ventas']);
+      qc.invalidateQueries(['dashboard']);
+      toast.success('Venta revertida');
+      setConfirmRevertir(null);
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al revertir'),
   });
 
   const ventaManualMut = useMutation({
@@ -497,6 +509,9 @@ export default function RegistroVentasPage() {
                       <button onClick={() => setModalEmail(v)} title="Enviar correo" className="p-2 rounded-lg text-gray-500 hover:text-sky-400 hover:bg-sky-500/10">
                         <Mail size={15} />
                       </button>
+                      <button onClick={() => setConfirmRevertir(v)} title="Revertir venta" className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10">
+                        <RotateCcw size={15} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -556,6 +571,9 @@ export default function RegistroVentasPage() {
                         <button onClick={() => setModalEmail(v)} title="Enviar por correo" className="p-1.5 rounded-lg text-gray-500 hover:text-sky-400 hover:bg-sky-500/10 transition-colors">
                           <Mail size={15} />
                         </button>
+                        <button onClick={() => setConfirmRevertir(v)} title="Revertir venta" className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                          <RotateCcw size={15} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -587,6 +605,42 @@ export default function RegistroVentasPage() {
           onSave={(data) => ventaManualMut.mutate(data)}
           isPending={ventaManualMut.isPending}
         />
+      )}
+
+      {/* Modal confirmación revertir */}
+      {confirmRevertir && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="card w-full max-w-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                <RotateCcw size={20} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold">Revertir venta</h3>
+                <p className="text-gray-500 text-xs">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+            <div className="bg-gray-800 rounded-xl p-3 mb-4 space-y-1 text-sm">
+              <p className="text-gray-400">Arreglo: <span className="text-white font-medium">{confirmRevertir.nombre_arreglo}</span></p>
+              <p className="text-gray-400">Monto: <span className="text-red-400 font-bold">₡{parseFloat(confirmRevertir.precio_venta || 0).toLocaleString('es-CR')}</span></p>
+              {confirmRevertir.nombre_cliente && (
+                <p className="text-gray-400">Cliente: <span className="text-white">{confirmRevertir.nombre_cliente}</span></p>
+              )}
+              {confirmRevertir.catalogo_id && (
+                <p className="text-xs text-amber-400 mt-1">El stock de los insumos ser\xE1 restaurado autom\xE1ticamente.</p>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmRevertir(null)} className="btn-secondary flex-1 text-sm">Cancelar</button>
+              <button
+                onClick={() => revertirMut.mutate(confirmRevertir.id)}
+                disabled={revertirMut.isPending}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50">
+                {revertirMut.isPending ? 'Revirtiendo...' : 'S\xED, revertir'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
