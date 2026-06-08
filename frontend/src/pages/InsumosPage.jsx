@@ -526,33 +526,33 @@ export default function InsumosPage() {
         </button>
       </div>
 
-      {/* Buscador + filtro categoría */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input className="input pl-9" placeholder="Buscar insumo..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
-        </div>
-        {categorias.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setFiltroCategoria('')}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${!filtroCategoria ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-              Todas
-            </button>
-            {categorias.map(cat => {
-              const activa = String(filtroCategoria) === String(cat.id);
-              return (
-                <button key={cat.id} onClick={() => setFiltroCategoria(p => String(p) === String(cat.id) ? '' : String(cat.id))}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors`}
-                  style={activa
-                    ? { backgroundColor: cat.color, borderColor: cat.color, color: '#fff' }
-                    : { borderColor: `${cat.color}40`, color: cat.color }}>
-                  {cat.nombre}
-                </button>
-              );
-            })}
-          </div>
-        )}
+      {/* Buscador */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none z-10" />
+        <input className="input pl-9" placeholder="Buscar insumo..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
       </div>
+
+      {/* Filtro categoría */}
+      {categorias.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setFiltroCategoria('')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${!filtroCategoria ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+            Todas
+          </button>
+          {categorias.map(cat => {
+            const activa = String(filtroCategoria) === String(cat.id);
+            return (
+              <button key={cat.id} onClick={() => setFiltroCategoria(p => String(p) === String(cat.id) ? '' : String(cat.id))}
+                className="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
+                style={activa
+                  ? { backgroundColor: cat.color, borderColor: cat.color, color: '#fff' }
+                  : { borderColor: `${cat.color}40`, color: cat.color }}>
+                {cat.nombre}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Valor total */}
       <div className="flex items-center justify-between">
