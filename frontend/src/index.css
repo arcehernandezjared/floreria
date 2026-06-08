@@ -4,6 +4,7 @@
 
 @layer base {
   * { @apply border-gray-800; }
+  html { color-scheme: dark; }
   body { @apply font-sans antialiased; }
   ::-webkit-scrollbar { @apply w-1.5; }
   ::-webkit-scrollbar-track { @apply bg-gray-900; }
@@ -16,7 +17,7 @@
   .btn-primary { @apply bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2 rounded-xl transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed; }
   .btn-secondary { @apply bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium px-4 py-2 rounded-xl transition-all duration-200 flex items-center gap-2; }
   .btn-danger { @apply bg-red-600/20 hover:bg-red-600/30 text-red-400 font-medium px-4 py-2 rounded-xl transition-all duration-200 flex items-center gap-2; }
-  .input { @apply w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all; }
+  .input { @apply w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all; caret-color: white; }
   .label { @apply block text-sm font-medium text-gray-400 mb-1.5; }
   .badge { @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium; }
   .badge-green { @apply badge bg-green-500/15 text-green-400 border border-green-500/20; }
@@ -68,3 +69,17 @@ main.sidebar-open .table-view { display: none  !important; }
 .markdown-chat td { padding: 0.35rem 0.5rem; color: #e5e7eb; border-bottom: 1px solid rgba(55,65,81,0.4); }
 .markdown-chat tr:last-child td { border-bottom: none; }
 .markdown-chat hr { border-color: #374151; margin: 0.5rem 0; }
+
+/* ── Fix autofill Safari/Chrome móvil ──────────────────────────────────────
+   Sin esto, el browser pone fondo amarillo/blanco y el texto blanco
+   queda invisible sobre el fondo claro.
+─────────────────────────────────────────────────────────────────────────── */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus,
+.input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0 1000px #1f2937 inset !important;
+  box-shadow: 0 0 0 1000px #1f2937 inset !important;
+  caret-color: #ffffff;
+}
