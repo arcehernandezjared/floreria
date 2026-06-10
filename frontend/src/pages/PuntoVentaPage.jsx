@@ -678,6 +678,10 @@ export default function PuntoVentaPage() {
     setCarrito(prev => prev.map(i => i._key === key ? { ...i, precio_unitario: Number(valor) } : i));
   };
 
+  const cambiarPrecioArreglo = (key, valor) => {
+    setCarrito(prev => prev.map(i => i._key === key ? { ...i, precio_venta: Number(valor) } : i));
+  };
+
   const categoriasArreglos = [...new Set(
     catalogo.filter(a => a.activo && a.categoria).map(a => a.categoria)
   )].sort();
@@ -1007,6 +1011,16 @@ export default function PuntoVentaPage() {
                           className="input w-full text-sm py-1.5 text-brand-400 font-semibold"
                           value={item.precio_unitario}
                           onChange={e => cambiarPrecioInsumo(item._key, e.target.value)}
+                          onClick={e => e.stopPropagation()} />
+                      </div>
+                    )}
+                    {item.tipo === 'catalogo' && (
+                      <div className="mb-2">
+                        <label className="text-xs text-gray-500 mb-1 block">Precio (₡)</label>
+                        <input type="number" min="0" step="50"
+                          className="input w-full text-sm py-1.5 text-brand-400 font-semibold"
+                          value={item.precio_venta}
+                          onChange={e => cambiarPrecioArreglo(item._key, e.target.value)}
                           onClick={e => e.stopPropagation()} />
                       </div>
                     )}
