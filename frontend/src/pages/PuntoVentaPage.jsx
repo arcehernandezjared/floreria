@@ -513,7 +513,6 @@ export default function PuntoVentaPage() {
   const [modalRecibo, setModalRecibo]     = useState(false);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [pagoCliente, setPagoCliente]     = useState('');
-  const [vistaMovil, setVistaMovil]       = useState('productos');
   const [modalPersonalizado, setModalPersonalizado] = useState(false);
   const qc = useQueryClient();
 
@@ -599,7 +598,6 @@ export default function PuntoVentaPage() {
     setModalRecibo(false);
     setVentaSnapshot(null);
     setCarrito([]);
-    setVistaMovil('productos');
     setCliente('');
     setEmailCliente('');
     setDescuento(0);
@@ -740,27 +738,10 @@ export default function PuntoVentaPage() {
   const vuelto   = pagoNum > 0 ? pagoNum - total : null;
 
   return (
-    <div className="flex flex-col lg:flex-row lg:gap-6" style={{ height: 'calc(100dvh - 5rem)', maxHeight: 'calc(100dvh - 5rem)' }}>
+    <div className="flex flex-col lg:flex-row gap-3 lg:gap-6" style={{ height: 'calc(100dvh - 5rem)', maxHeight: 'calc(100dvh - 5rem)' }}>
 
       {/* ── Panel Izquierdo ── */}
-      <div className={`flex-1 flex flex-col min-w-0 min-h-0 ${vistaMovil === 'carrito' ? 'hidden lg:flex' : 'flex'}`}>
-
-        {/* Nav móvil — solo en tablet/móvil */}
-        <div className="flex lg:hidden gap-1 mb-3 bg-gray-900 rounded-xl p-1 flex-shrink-0">
-          <button onClick={() => setVistaMovil('productos')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${vistaMovil === 'productos' ? 'bg-brand-600 text-white' : 'text-gray-400'}`}>
-            <LayoutGrid size={15} /> Productos
-          </button>
-          <button onClick={() => setVistaMovil('carrito')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all relative ${vistaMovil === 'carrito' ? 'bg-brand-600 text-white' : 'text-gray-400'}`}>
-            <ShoppingCart size={15} /> Carrito
-            {carrito.length > 0 && (
-              <span className="bg-brand-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full leading-none ml-1">
-                {carrito.reduce((s, i) => s + i.cantidad, 0)}
-              </span>
-            )}
-          </button>
-        </div>
+      <div className="flex-[3] lg:flex-1 flex flex-col min-w-0 min-h-0">
 
         {/* Header — oculto en móvil para ahorrar espacio */}
         <div className="hidden lg:flex items-center justify-between mb-4 flex-shrink-0">
@@ -955,25 +936,10 @@ export default function PuntoVentaPage() {
       </div>
 
       {/* ── Carrito ── */}
-      <div className={`flex flex-col lg:w-80 lg:flex-shrink-0 ${vistaMovil === 'productos' ? 'hidden lg:flex' : 'flex flex-1 min-h-0'}`}>
-        {/* Nav móvil en la vista carrito */}
-        <div className="flex lg:hidden gap-1 mb-3 bg-gray-900 rounded-xl p-1 flex-shrink-0">
-          <button onClick={() => setVistaMovil('productos')}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-gray-400 transition-all">
-            <LayoutGrid size={15} /> Productos
-          </button>
-          <button className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-brand-600 text-white">
-            <ShoppingCart size={15} /> Carrito
-            {carrito.length > 0 && (
-              <span className="bg-white/20 text-white text-xs font-bold px-1.5 py-0.5 rounded-full leading-none">
-                {carrito.length}
-              </span>
-            )}
-          </button>
-        </div>
+      <div className="flex-[2] lg:flex-none lg:w-80 lg:flex-shrink-0 flex flex-col min-h-0">
 
         <div className="card flex-1 flex flex-col p-0 overflow-hidden min-h-0">
-          <div className="p-4 border-b border-gray-800 hidden lg:flex items-center gap-2">
+          <div className="p-3 lg:p-4 border-b border-gray-800 flex items-center gap-2">
             <ShoppingCart size={18} className="text-brand-400" />
             <h2 className="font-semibold text-white">Carrito</h2>
             {carrito.length > 0 && (
