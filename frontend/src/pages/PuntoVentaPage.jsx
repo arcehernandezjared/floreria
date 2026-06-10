@@ -738,10 +738,10 @@ export default function PuntoVentaPage() {
   const vuelto   = pagoNum > 0 ? pagoNum - total : null;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-3 lg:gap-6" style={{ height: 'calc(100dvh - 5rem)', maxHeight: 'calc(100dvh - 5rem)' }}>
+    <div className="flex flex-row gap-2 lg:gap-6" style={{ height: 'calc(100dvh - 5rem)', maxHeight: 'calc(100dvh - 5rem)' }}>
 
       {/* ── Panel Izquierdo ── */}
-      <div className="flex-[3] lg:flex-1 flex flex-col min-w-0 min-h-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
 
         {/* Header — oculto en móvil para ahorrar espacio */}
         <div className="hidden lg:flex items-center justify-between mb-4 flex-shrink-0">
@@ -936,7 +936,7 @@ export default function PuntoVentaPage() {
       </div>
 
       {/* ── Carrito ── */}
-      <div className="flex-[2] lg:flex-none lg:w-80 lg:flex-shrink-0 flex flex-col min-h-0">
+      <div className="w-2/5 lg:w-80 flex-shrink-0 flex flex-col min-h-0">
 
         <div className="card flex-1 flex flex-col p-0 overflow-hidden min-h-0">
           <div className="p-3 lg:p-4 border-b border-gray-800 flex items-center gap-2">
