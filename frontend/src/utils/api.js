@@ -25,7 +25,7 @@ export default api;
 
 export const formatMoney = (amount, symbol = '₡') => {
   if (!amount && amount !== 0) return `${symbol}0`;
-  return `${symbol}${Number(amount).toLocaleString('es-CR')}`;
+  return `${symbol}${Number(amount).toLocaleString('es-CR', { maximumFractionDigits: 0 })}`;
 };
 
 export const formatDate = (date) => {
