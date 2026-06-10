@@ -32,7 +32,15 @@ const TIPO_COLOR = {
 };
 
 function fmtCRC(n) {
-  return `CRC ${Number(n).toLocaleString('es-CR', { minimumFractionDigits: 0 })}`;
+  return `CRC ${Number(n).toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function fmtQty(n) {
+  const v = parseFloat(n);
+  if (Math.abs(v - 1) < 0.01) return '1';
+  if (Math.abs(v - 0.5) < 0.01) return '½';
+  if (Math.abs(v - 1 / 3) < 0.02) return '⅓';
+  return parseFloat(v.toFixed(2)).toString();
 }
 
 function generarReciboPOS(snap) {
@@ -146,7 +154,7 @@ function generarReciboPOS(snap) {
     const precio = i.tipo === 'insumo' ? i.precio_unitario : i.precio_venta;
     return [
       i.nombre + (i.tipo === 'insumo' ? ' (suelta)' : ''),
-      String(i.cantidad),
+      fmtQty(i.cantidad),
       fmtCRC(precio),
       fmtCRC(precio * i.cantidad),
     ];
@@ -1225,7 +1233,7 @@ export default function PuntoVentaPage() {
                   return (
                     <div key={item._key} className="flex justify-between text-sm">
                       <span className="text-gray-300 flex-1 mr-2">
-                        {item.nombre}{item.tipo === 'insumo' && <span className="text-pink-400 text-xs ml-1">(suelta)</span>} ×{item.cantidad}
+                        {item.nombre}{item.tipo === 'insumo' && <span className="text-pink-400 text-xs ml-1">(suelta)</span>} ×{fmtQty(item.cantidad)}
                       </span>
                       <span className="text-white font-medium flex-shrink-0">{formatMoney(precio * item.cantidad)}</span>
                     </div>
@@ -1276,7 +1284,7 @@ export default function PuntoVentaPage() {
                   const precio = item.tipo === 'insumo' ? item.precio_unitario : item.precio_venta;
                   return (
                     <div key={i} className="flex justify-between text-sm">
-                      <span className="text-gray-300">{item.nombre} ×{item.cantidad}</span>
+                      <span className="text-gray-300">{item.nombre} ×{fmtQty(item.cantidad)}</span>
                       <span className="text-white font-medium">{formatMoney(precio * item.cantidad)}</span>
                     </div>
                   );
