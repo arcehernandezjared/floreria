@@ -165,15 +165,14 @@ async function updateEstado(req, res) {
     if (estado === 'entregado' && pedido.estado !== 'entregado') {
       // ── Registrar ventas ─────────────────────────────────────────────────
       const items = await query('SELECT * FROM pedido_items WHERE pedido_id = ?', [id]);
-      const fechaCR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
       let ventasOk = 0;
 
       const insertarVenta = async (values) => {
         try {
           await query(
             `INSERT INTO ventas_floreria
-              (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas, fecha)
-             VALUES (?,?,?,?,?,?,?,?)`,
+              (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
+             VALUES (?,?,?,?,?,?,?)`,
             values
           );
           ventasOk++;
@@ -210,8 +209,7 @@ async function updateEstado(req, res) {
             costoUnit * cantNum,
             'mostrador',
             pedido.cliente_nombre || null,
-            `Pedido #${pedido.numero}`,
-            fechaCR
+            `Pedido #${pedido.numero}`
           ]);
         }
       } else if (parseFloat(pedido.precio) > 0) {
@@ -222,8 +220,7 @@ async function updateEstado(req, res) {
           0,
           'mostrador',
           pedido.cliente_nombre || null,
-          `Pedido #${pedido.numero}`,
-          fechaCR
+          `Pedido #${pedido.numero}`
         ]);
       }
 
