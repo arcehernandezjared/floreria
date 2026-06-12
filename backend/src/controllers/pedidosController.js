@@ -24,6 +24,7 @@ async function ensureTable() {
   )`);
   // Migración: agregar columna si la tabla ya existía sin ella
   await query(`ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS adelanto_original DECIMAL(12,2) DEFAULT NULL`).catch(() => {});
+  await query(`ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS ventas_registradas TINYINT(1) DEFAULT 0`).catch(() => {});
   await query(`CREATE TABLE IF NOT EXISTS pedido_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
     pedido_id INT NOT NULL,
@@ -162,73 +163,53 @@ async function updateEstado(req, res) {
     const pedido = await queryOne('SELECT * FROM pedidos WHERE id = ?', [id]);
     if (!pedido) return res.status(404).json({ success: false, message: 'Pedido no encontrado' });
 
-    if (estado === 'entregado' && pedido.estado !== 'entregado') {
-      // ── Registrar ventas ─────────────────────────────────────────────────
+    if (estado === 'entregado' && !pedido.ventas_registradas) {
+      // ── Registrar UNA venta por pedido con el precio total real ──────────
       const items = await query('SELECT * FROM pedido_items WHERE pedido_id = ?', [id]);
-      let ventasOk = 0;
 
-      const insertarVenta = async (values) => {
-        try {
-          await query(
-            `INSERT INTO ventas_floreria
-              (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
-             VALUES (?,?,?,?,?,?,?)`,
-            values
+      // Calcular costo total de producción sumando todos los items
+      let costoTotal = 0;
+      for (const item of items) {
+        if (item.tipo === 'arreglo') {
+          const costoRow = await queryOne(
+            `SELECT COALESCE(SUM(fi.cantidad * i.costo_unitario), 0) as costo
+             FROM ficha_ingredientes fi JOIN insumos i ON fi.insumo_id = i.id
+             WHERE fi.catalogo_id = ?`,
+            [item.referencia_id]
           );
-          ventasOk++;
-        } catch (e) {
-          logger.error(`updateEstado INSERT venta ERROR: ${e.message} | values: ${JSON.stringify(values)}`);
+          costoTotal += parseFloat(costoRow?.costo || 0) * (parseFloat(item.cantidad) || 1);
+        } else {
+          costoTotal += parseFloat(item.precio_unitario || 0) * (parseFloat(item.cantidad) || 1);
         }
-      };
+      }
 
-      if (items.length > 0) {
-        for (const item of items) {
-          let costoUnit = 0;
-          if (item.tipo === 'arreglo') {
-            const costoRow = await queryOne(
-              `SELECT COALESCE(SUM(fi.cantidad * i.costo_unitario), 0) as costo
-               FROM ficha_ingredientes fi JOIN insumos i ON fi.insumo_id = i.id
-               WHERE fi.catalogo_id = ?`,
-              [item.referencia_id]
-            );
-            costoUnit = parseFloat(costoRow?.costo || 0);
-          } else {
-            costoUnit = parseFloat(item.precio_unitario);
-          }
-          // Verificar que el catalogo_id existe antes de usarlo (evita FK violation)
-          let catalogoId = null;
-          if (item.tipo === 'arreglo') {
-            const existe = await queryOne('SELECT id FROM catalogo WHERE id = ?', [item.referencia_id]);
-            if (existe) catalogoId = item.referencia_id;
-          }
-          const cantNum = parseFloat(item.cantidad) || 1;
-          await insertarVenta([
-            catalogoId,
-            item.nombre || pedido.tipo_arreglo || 'Pedido',
-            parseFloat(item.subtotal) || 0,
-            costoUnit * cantNum,
+      const nombreVenta = items.length > 0
+        ? items.map(i => i.nombre).filter(Boolean).join(', ') || pedido.tipo_arreglo || 'Pedido'
+        : pedido.tipo_arreglo || 'Pedido';
+
+      try {
+        await query(
+          `INSERT INTO ventas_floreria
+            (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
+           VALUES (?,?,?,?,?,?,?)`,
+          [
+            null,
+            nombreVenta,
+            parseFloat(pedido.precio) || 0,
+            costoTotal,
             'mostrador',
             pedido.cliente_nombre || null,
             `Pedido #${pedido.numero}`
-          ]);
-        }
-      } else if (parseFloat(pedido.precio) > 0) {
-        await insertarVenta([
-          null,
-          pedido.tipo_arreglo || 'Pedido',
-          parseFloat(pedido.precio),
-          0,
-          'mostrador',
-          pedido.cliente_nombre || null,
-          `Pedido #${pedido.numero}`
-        ]);
+          ]
+        );
+        logger.info(`Pedido #${pedido.numero} entregado — venta registrada por ${pedido.precio}`);
+      } catch (e) {
+        logger.error(`updateEstado INSERT venta ERROR: ${e.message}`);
       }
 
-      logger.info(`Pedido #${pedido.numero} entregado — ${ventasOk}/${Math.max(items.length, 1)} venta(s) registradas`);
-
-      // ── Saldo → 0: guardar adelanto original y poner adelanto = precio ──
+      // ── Saldo → 0 y marcar ventas como registradas (no volver a registrar) ──
       await query(
-        `UPDATE pedidos SET estado = ?, adelanto_original = COALESCE(adelanto_original, adelanto), adelanto = precio WHERE id = ?`,
+        `UPDATE pedidos SET estado = ?, adelanto_original = COALESCE(adelanto_original, adelanto), adelanto = precio, ventas_registradas = 1 WHERE id = ?`,
         [estado, id]
       );
 
