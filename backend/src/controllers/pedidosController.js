@@ -178,7 +178,7 @@ async function updateEstado(req, res) {
           );
           ventasOk++;
         } catch (e) {
-          logger.error(`updateEstado INSERT venta: ${e.message}`);
+          logger.error(`updateEstado INSERT venta ERROR: ${e.message} | values: ${JSON.stringify(values)}`);
         }
       };
 
@@ -202,11 +202,12 @@ async function updateEstado(req, res) {
             const existe = await queryOne('SELECT id FROM catalogo WHERE id = ?', [item.referencia_id]);
             if (existe) catalogoId = item.referencia_id;
           }
+          const cantNum = parseFloat(item.cantidad) || 1;
           await insertarVenta([
             catalogoId,
-            item.nombre,
-            parseFloat(item.subtotal),
-            costoUnit * parseInt(item.cantidad),
+            item.nombre || pedido.tipo_arreglo || 'Pedido',
+            parseFloat(item.subtotal) || 0,
+            costoUnit * cantNum,
             'mostrador',
             pedido.cliente_nombre || null,
             `Pedido #${pedido.numero}`,
@@ -226,7 +227,7 @@ async function updateEstado(req, res) {
         ]);
       }
 
-      logger.info(`Pedido #${pedido.numero} entregado — ${ventasOk} venta(s) registradas`);
+      logger.info(`Pedido #${pedido.numero} entregado — ${ventasOk}/${Math.max(items.length, 1)} venta(s) registradas`);
 
       // ── Saldo → 0: guardar adelanto original y poner adelanto = precio ──
       await query(
