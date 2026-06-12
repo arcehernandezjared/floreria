@@ -14,6 +14,7 @@ async function ensureTable() {
     tributo_numero VARCHAR(50),
     precio DECIMAL(12,2) DEFAULT 0,
     adelanto DECIMAL(12,2) DEFAULT 0,
+    adelanto_original DECIMAL(12,2) DEFAULT NULL,
     tipo_pago ENUM('efectivo','sinpe','tarjeta') DEFAULT 'efectivo',
     tipo_entrega ENUM('tienda','express') DEFAULT 'tienda',
     dedicatoria TEXT,
@@ -21,6 +22,8 @@ async function ensureTable() {
     estado ENUM('pendiente','listo','entregado','cancelado') DEFAULT 'pendiente',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`);
+  // Migración: agregar columna si la tabla ya existía sin ella
+  await query(`ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS adelanto_original DECIMAL(12,2) DEFAULT NULL`).catch(() => {});
   await query(`CREATE TABLE IF NOT EXISTS pedido_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
     pedido_id INT NOT NULL,
@@ -159,14 +162,28 @@ async function updateEstado(req, res) {
     const pedido = await queryOne('SELECT * FROM pedidos WHERE id = ?', [id]);
     if (!pedido) return res.status(404).json({ success: false, message: 'Pedido no encontrado' });
 
-    // Al marcar como entregado, registrar como ventas (solo si no estaba ya entregado)
     if (estado === 'entregado' && pedido.estado !== 'entregado') {
+      // ── Registrar ventas ─────────────────────────────────────────────────
       const items = await query('SELECT * FROM pedido_items WHERE pedido_id = ?', [id]);
       const fechaCR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+      let ventasOk = 0;
+
+      const insertarVenta = async (values) => {
+        try {
+          await query(
+            `INSERT INTO ventas_floreria
+              (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas, fecha)
+             VALUES (?,?,?,?,?,?,?,?)`,
+            values
+          );
+          ventasOk++;
+        } catch (e) {
+          logger.error(`updateEstado INSERT venta: ${e.message}`);
+        }
+      };
 
       if (items.length > 0) {
         for (const item of items) {
-          // Para arreglos del catálogo, calcular el costo real de producción
           let costoUnit = 0;
           if (item.tipo === 'arreglo') {
             const costoRow = await queryOne(
@@ -177,41 +194,57 @@ async function updateEstado(req, res) {
             );
             costoUnit = parseFloat(costoRow?.costo || 0);
           } else {
-            // Flores sueltas: el costo es el precio_unitario del insumo
             costoUnit = parseFloat(item.precio_unitario);
           }
-
-          await query(
-            `INSERT INTO ventas_floreria
-              (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas, fecha)
-             VALUES (?,?,?,?,?,?,?,?)`,
-            [
-              item.tipo === 'arreglo' ? item.referencia_id : null,
-              item.nombre,
-              parseFloat(item.subtotal),          // total de la línea
-              costoUnit * parseInt(item.cantidad), // costo total de la línea
-              'mostrador',
-              pedido.cliente_nombre || null,
-              `Pedido #${pedido.numero}`,
-              fechaCR
-            ]
-          );
+          // Verificar que el catalogo_id existe antes de usarlo (evita FK violation)
+          let catalogoId = null;
+          if (item.tipo === 'arreglo') {
+            const existe = await queryOne('SELECT id FROM catalogo WHERE id = ?', [item.referencia_id]);
+            if (existe) catalogoId = item.referencia_id;
+          }
+          await insertarVenta([
+            catalogoId,
+            item.nombre,
+            parseFloat(item.subtotal),
+            costoUnit * parseInt(item.cantidad),
+            'mostrador',
+            pedido.cliente_nombre || null,
+            `Pedido #${pedido.numero}`,
+            fechaCR
+          ]);
         }
       } else if (parseFloat(pedido.precio) > 0) {
-        // Sin items detallados, registrar como una sola venta
-        await query(
-          `INSERT INTO ventas_floreria
-            (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas, fecha)
-           VALUES (?,?,?,?,?,?,?,?)`,
-          [null, pedido.tipo_arreglo || 'Pedido', parseFloat(pedido.precio), 0,
-           'mostrador', pedido.cliente_nombre || null, `Pedido #${pedido.numero}`, fechaCR]
-        );
+        await insertarVenta([
+          null,
+          pedido.tipo_arreglo || 'Pedido',
+          parseFloat(pedido.precio),
+          0,
+          'mostrador',
+          pedido.cliente_nombre || null,
+          `Pedido #${pedido.numero}`,
+          fechaCR
+        ]);
       }
 
-      logger.info(`Pedido #${pedido.numero} entregado — ${items.length} item(s) registrados como ventas`);
+      logger.info(`Pedido #${pedido.numero} entregado — ${ventasOk} venta(s) registradas`);
+
+      // ── Saldo → 0: guardar adelanto original y poner adelanto = precio ──
+      await query(
+        `UPDATE pedidos SET estado = ?, adelanto_original = COALESCE(adelanto_original, adelanto), adelanto = precio WHERE id = ?`,
+        [estado, id]
+      );
+
+    } else if (estado !== 'entregado' && pedido.estado === 'entregado') {
+      // ── Revertir saldo al adelanto original ──────────────────────────────
+      await query(
+        `UPDATE pedidos SET estado = ?, adelanto = COALESCE(adelanto_original, adelanto), adelanto_original = NULL WHERE id = ?`,
+        [estado, id]
+      );
+
+    } else {
+      await query('UPDATE pedidos SET estado = ? WHERE id = ?', [estado, id]);
     }
 
-    await query('UPDATE pedidos SET estado = ? WHERE id = ?', [estado, id]);
     res.json({ success: true });
   } catch (e) {
     logger.error(`updateEstado: ${e.message}`);
