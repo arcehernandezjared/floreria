@@ -561,17 +561,19 @@ export default function PuntoVentaPage() {
       const catalogoItems = carrito.filter(i => i.tipo === 'catalogo');
       const insumoItems   = carrito.filter(i => i.tipo === 'insumo');
       const promises = [];
-      catalogoItems.forEach(item => {
-        for (let n = 0; n < item.cantidad; n++) {
-          promises.push(api.post('/catalogo/venta', {
-            catalogo_id: item.id,
-            nombre_cliente: cliente || 'Cliente mostrador',
-            canal,
-            precio_venta: item.precio_venta * (1 - descuento / 100),
+      if (catalogoItems.length > 0) {
+        promises.push(api.post('/catalogo/venta-lote', {
+          items: catalogoItems.map(i => ({
+            catalogo_id: i.id,
+            cantidad: i.cantidad,
+            precio_venta: i.precio_venta,
             notas: ''
-          }));
-        }
-      });
+          })),
+          nombre_cliente: cliente || 'Cliente mostrador',
+          canal,
+          descuento,
+        }));
+      }
       if (insumoItems.length > 0) {
         promises.push(api.post('/insumos/venta-directa', {
           items: insumoItems.map(i => ({ insumo_id: i.id, cantidad: Math.round(i.cantidad * 10000) / 10000, precio_unitario: i.precio_unitario })),

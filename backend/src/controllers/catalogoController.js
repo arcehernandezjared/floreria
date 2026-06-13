@@ -267,6 +267,87 @@ async function registrarVenta(req, res) {
   }
 }
 
+async function registrarVentaLote(req, res) {
+  try {
+    const { items, nombre_cliente, canal, descuento } = req.body;
+    // items: [{ catalogo_id, precio_venta, cantidad, notas }]
+    if (!items || items.length === 0)
+      return res.status(400).json({ success: false, message: 'Sin items' });
+
+    const descPct = parseFloat(descuento) || 0;
+
+    // Pre-verificar stock de todos los insumos necesarios antes de abrir transacción
+    const stockNecesario = {};
+    const arreglosMap = {};
+    for (const item of items) {
+      const arreglo = await queryOne('SELECT * FROM catalogo WHERE id = ? AND activo = 1', [item.catalogo_id]);
+      if (!arreglo) return res.status(404).json({ success: false, message: `Arreglo ${item.catalogo_id} no encontrado` });
+      arreglosMap[item.catalogo_id] = arreglo;
+
+      const ings = await query(
+        `SELECT fi.insumo_id, fi.cantidad, i.stock_actual, i.nombre as insumo_nombre
+         FROM ficha_ingredientes fi JOIN insumos i ON fi.insumo_id = i.id
+         WHERE fi.catalogo_id = ?`,
+        [item.catalogo_id]
+      );
+      for (const ing of ings) {
+        const key = ing.insumo_id;
+        stockNecesario[key] = stockNecesario[key] || { nombre: ing.insumo_nombre, stock: parseFloat(ing.stock_actual), necesario: 0 };
+        stockNecesario[key].necesario += parseFloat(ing.cantidad) * (parseInt(item.cantidad) || 1);
+      }
+    }
+
+    const sinStock = Object.values(stockNecesario).filter(s => s.stock < s.necesario);
+    if (sinStock.length > 0)
+      return res.status(400).json({ success: false, message: `Stock insuficiente para: ${sinStock.map(s => s.nombre).join(', ')}` });
+
+    // Una sola transacción para todos los items — evita deadlock
+    await transaction(async (conn) => {
+      for (const item of items) {
+        const arreglo = arreglosMap[item.catalogo_id];
+        const cant = parseInt(item.cantidad) || 1;
+        const costo = await calcularCostoArreglo(item.catalogo_id, conn);
+        const precioFinal = parseFloat(item.precio_venta || arreglo.precio_venta) * (1 - descPct / 100);
+
+        for (let n = 0; n < cant; n++) {
+          await conn.query(
+            `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, notas)
+             VALUES (?,?,?,?,?,?,?)`,
+            [arreglo.id, arreglo.nombre, canal || 'mostrador', precioFinal, costo,
+             nombre_cliente || null, item.notas || null]
+          );
+        }
+
+        const ings = await conn.query(
+          `SELECT fi.insumo_id, fi.cantidad FROM ficha_ingredientes fi WHERE fi.catalogo_id = ?`,
+          [item.catalogo_id]
+        ).then(([rows]) => rows);
+
+        for (const ing of ings) {
+          const totalDescontar = parseFloat(ing.cantidad) * cant;
+          await conn.query(
+            'UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?',
+            [totalDescontar, ing.insumo_id]
+          );
+          const updated = await conn.query('SELECT stock_actual FROM insumos WHERE id = ?', [ing.insumo_id]).then(([r]) => r[0]);
+          if (parseFloat(updated.stock_actual) <= 0) {
+            await conn.query(
+              `UPDATE catalogo SET disponible_externo = 0 WHERE id IN (SELECT DISTINCT catalogo_id FROM ficha_ingredientes WHERE insumo_id = ?)`,
+              [ing.insumo_id]
+            );
+          }
+        }
+      }
+    });
+
+    logger.info(`registrarVentaLote: ${items.length} arreglo(s) — cliente: ${nombre_cliente || 'mostrador'}`);
+    res.status(201).json({ success: true, message: 'Venta registrada correctamente' });
+  } catch (error) {
+    logger.error(`registrarVentaLote: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 async function getVentas(req, res) {
   try {
     const { desde, hasta, canal } = req.query;
@@ -410,4 +491,4 @@ async function revertirVenta(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, getVentas, uploadImagen, ventaPersonalizada, revertirVenta };
+module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, getVentas, uploadImagen, ventaPersonalizada, revertirVenta };
