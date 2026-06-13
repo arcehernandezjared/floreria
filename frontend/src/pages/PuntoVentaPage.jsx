@@ -44,7 +44,7 @@ function fmtQty(n) {
 }
 
 function generarReciboPOS(snap) {
-  const { numero, items, cliente, canal, descuento, subtotal, descuentoMonto, total, fecha } = snap;
+  const { numero, items, cliente, canal, descuento, subtotalProductos, manoDeObra, subtotal, descuentoMonto, total, fecha } = snap;
   const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -197,7 +197,15 @@ function generarReciboPOS(snap) {
   doc.setTextColor(...GRAY);
   doc.text('Subtotal:', W - 50, y);
   doc.setTextColor(...DARK);
-  doc.text(fmtCRC(subtotal), W - 14, y, { align: 'right' });
+  doc.text(fmtCRC(subtotalProductos ?? subtotal), W - 14, y, { align: 'right' });
+
+  if (manoDeObra > 0) {
+    y += 7;
+    doc.setTextColor(...GRAY);
+    doc.text('Mano de obra:', W - 60, y);
+    doc.setTextColor(...DARK);
+    doc.text(fmtCRC(manoDeObra), W - 14, y, { align: 'right' });
+  }
 
   if (descuento > 0) {
     y += 7;
@@ -508,6 +516,7 @@ export default function PuntoVentaPage() {
   const [emailCliente, setEmailCliente] = useState('');
   const [canal, setCanal]           = useState('mostrador');
   const [descuento, setDescuento]   = useState(0);
+  const [manoDeObra, setManoDeObra] = useState(() => parseFloat(localStorage.getItem('pos_mano_obra') || '0') || 0);
   const [modalConfirm, setModalConfirm] = useState(false);
   const [ventaSnapshot, setVentaSnapshot] = useState(null);
   const [modalRecibo, setModalRecibo]     = useState(false);
@@ -528,8 +537,9 @@ export default function PuntoVentaPage() {
   const isLoading = tab === 'arreglos' ? loadingCat : loadingIns;
 
   // ── Totales ───────────────────────────────────────────────────────────
-  const subtotal = carrito.reduce((s, i) =>
+  const subtotalProductos = carrito.reduce((s, i) =>
     s + (i.tipo === 'insumo' ? i.precio_unitario : i.precio_venta) * i.cantidad, 0);
+  const subtotal = subtotalProductos + manoDeObra;
   const descuentoMonto = subtotal * (descuento / 100);
   const total = subtotal - descuentoMonto;
 
@@ -570,6 +580,16 @@ export default function PuntoVentaPage() {
           descuento,
         }));
       }
+      if (manoDeObra > 0) {
+        const fechaCR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+        promises.push(api.post('/ventas/manual', {
+          concepto: 'Mano de obra',
+          monto: manoDeObra,
+          fecha: fechaCR,
+          canal,
+          nombre_cliente: cliente || 'Cliente mostrador',
+        }));
+      }
       return Promise.all(promises);
     },
     onSuccess: () => {
@@ -580,6 +600,8 @@ export default function PuntoVentaPage() {
         email: emailCliente,
         canal,
         descuento,
+        subtotalProductos,
+        manoDeObra,
         subtotal,
         descuentoMonto,
         total,
@@ -1051,18 +1073,42 @@ export default function PuntoVentaPage() {
                   <input type="number" min="0" max="100" className="input w-full pl-8 text-sm py-2" placeholder="Descuento %"
                     value={descuento || ''} onChange={e => setDescuento(Math.min(100, Math.max(0, Number(e.target.value))))} />
                 </div>
+
+                {/* ── Mano de obra ── */}
+                <div className="flex items-center gap-2">
+                  <Wand2 size={13} className="text-gray-500 flex-shrink-0" />
+                  <span className="text-xs text-gray-400 flex-shrink-0">M. obra</span>
+                  <input
+                    type="number" min="0" step="500"
+                    className="input flex-1 text-xs py-2 text-right tabular-nums"
+                    placeholder="0"
+                    value={manoDeObra || ''}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value) || 0;
+                      setManoDeObra(v);
+                      localStorage.setItem('pos_mano_obra', v);
+                    }}
+                  />
+                </div>
               </div>
 
               {/* ── Totales ── */}
               <div className="px-3 pt-3 space-y-1 text-sm">
-                {descuento > 0 && (
+                {(descuento > 0 || manoDeObra > 0) && (
                   <>
                     <div className="flex justify-between text-gray-500">
-                      <span>Subtotal</span><span>{formatMoney(subtotal)}</span>
+                      <span>Productos</span><span>{formatMoney(subtotalProductos)}</span>
                     </div>
-                    <div className="flex justify-between text-red-400">
-                      <span>Descuento ({descuento}%)</span><span>-{formatMoney(descuentoMonto)}</span>
-                    </div>
+                    {manoDeObra > 0 && (
+                      <div className="flex justify-between text-gray-500">
+                        <span>Mano de obra</span><span>{formatMoney(manoDeObra)}</span>
+                      </div>
+                    )}
+                    {descuento > 0 && (
+                      <div className="flex justify-between text-red-400">
+                        <span>Descuento ({descuento}%)</span><span>-{formatMoney(descuentoMonto)}</span>
+                      </div>
+                    )}
                   </>
                 )}
                 <div className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3">
@@ -1220,6 +1266,11 @@ export default function PuntoVentaPage() {
                   );
                 })}
               </div>
+              {manoDeObra > 0 && (
+                <div className="flex justify-between text-sm text-gray-400 mb-1">
+                  <span>Mano de obra</span><span>+{formatMoney(manoDeObra)}</span>
+                </div>
+              )}
               {descuento > 0 && (
                 <div className="flex justify-between text-sm text-red-400 mb-1">
                   <span>Descuento {descuento}%</span><span>-{formatMoney(descuentoMonto)}</span>
@@ -1269,6 +1320,12 @@ export default function PuntoVentaPage() {
                     </div>
                   );
                 })}
+                {ventaSnapshot.manoDeObra > 0 && (
+                  <div className="flex justify-between text-gray-400 text-xs">
+                    <span>Mano de obra</span>
+                    <span>+{formatMoney(ventaSnapshot.manoDeObra)}</span>
+                  </div>
+                )}
                 {ventaSnapshot.descuento > 0 && (
                   <div className="flex justify-between text-red-400 text-xs">
                     <span>Descuento ({ventaSnapshot.descuento}%)</span>
