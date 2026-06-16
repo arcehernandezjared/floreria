@@ -113,6 +113,22 @@ async function createPedido(req, res) {
 
     await saveItems(result.insertId, items);
 
+    // Registrar adelanto como venta inmediata si hay adelanto
+    const adelantoNum = parseFloat(adelanto) || 0;
+    if (adelantoNum > 0) {
+      await query(
+        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
+         VALUES (NULL, ?, ?, 0, 'mostrador', ?, ?)`,
+        [
+          `Adelanto de pedido — ${tipo_arreglo || 'Pedido'}`,
+          adelantoNum,
+          cliente_nombre || null,
+          `Pedido #${numero}`
+        ]
+      );
+      logger.info(`Adelanto ₡${adelantoNum} de pedido #${numero} registrado como venta`);
+    }
+
     res.status(201).json({ success: true, data: { id: result.insertId, numero } });
   } catch (e) {
     logger.error(`createPedido: ${e.message}`);
@@ -187,22 +203,29 @@ async function updateEstado(req, res) {
         ? items.map(i => i.nombre).filter(Boolean).join(', ') || pedido.tipo_arreglo || 'Pedido'
         : pedido.tipo_arreglo || 'Pedido';
 
+      // Solo registrar el saldo pendiente (precio - adelanto ya cobrado al crear el pedido)
+      const saldoPendiente = (parseFloat(pedido.precio) || 0) - (parseFloat(pedido.adelanto) || 0);
+
       try {
-        await query(
-          `INSERT INTO ventas_floreria
-            (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
-           VALUES (?,?,?,?,?,?,?)`,
-          [
-            null,
-            nombreVenta,
-            parseFloat(pedido.precio) || 0,
-            costoTotal,
-            'mostrador',
-            pedido.cliente_nombre || null,
-            `Pedido #${pedido.numero}`
-          ]
-        );
-        logger.info(`Pedido #${pedido.numero} entregado — venta registrada por ${pedido.precio}`);
+        if (saldoPendiente > 0) {
+          await query(
+            `INSERT INTO ventas_floreria
+              (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
+             VALUES (?,?,?,?,?,?,?)`,
+            [
+              null,
+              `Saldo pedido — ${nombreVenta}`,
+              saldoPendiente,
+              costoTotal,
+              'mostrador',
+              pedido.cliente_nombre || null,
+              `Pedido #${pedido.numero}`
+            ]
+          );
+          logger.info(`Pedido #${pedido.numero} entregado — saldo ₡${saldoPendiente} registrado`);
+        } else {
+          logger.info(`Pedido #${pedido.numero} entregado — totalmente pagado con adelanto, sin saldo pendiente`);
+        }
       } catch (e) {
         logger.error(`updateEstado INSERT venta ERROR: ${e.message}`);
       }
