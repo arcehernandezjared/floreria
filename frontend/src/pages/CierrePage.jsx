@@ -190,23 +190,12 @@ export default function CierrePage() {
       )}
 
       {/* KPIs del rango seleccionado */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCierre
-          label={hayFiltros ? 'Rentabilidad del período' : 'Rentabilidad acumulada'}
-          valor={formatMoney(totalUtilidad)}
-          color={totalUtilidad >= 0 ? 'text-emerald-400' : 'text-red-400'}
-          sub={`${cierresFiltrados.length} días cerrados`}
-        />
+      <div className="grid grid-cols-2 gap-4">
         <KpiCierre
           label={hayFiltros ? 'Vendido en el período' : 'Total vendido (histórico)'}
           valor={formatMoney(totalVentas)}
           color="text-white"
           sub="solo días con cierre"
-        />
-        <KpiCierre
-          label="Promedio rentabilidad / día"
-          valor={formatMoney(promDiario)}
-          color={promDiario >= 0 ? 'text-blue-400' : 'text-red-400'}
         />
         <KpiCierre
           label="Mejor día"
