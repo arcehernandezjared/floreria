@@ -22,7 +22,9 @@ function getPool() {
   return pool;
 }
 
-// Migración idempotente: agrega columna de enlace si no existe
+// Migración idempotente: agrega columna de enlace si no existe.
+// Tabla destino: "products" — es la que alimenta el catálogo público (index.php#shop, producto.php).
+// ("store_products" es una tabla aparte para el panel de "tienda" / crea-arreglo-detalle, no es el catálogo público).
 async function ensureSyncSchema() {
   const p = getPool();
   if (!p) {
@@ -30,8 +32,8 @@ async function ensureSyncSchema() {
     return;
   }
   try {
-    await p.query('ALTER TABLE store_products ADD COLUMN floreria_id INT NULL UNIQUE');
-    logger.info('phpCatalogSync: columna floreria_id agregada a store_products');
+    await p.query('ALTER TABLE products ADD COLUMN floreria_id INT NULL UNIQUE');
+    logger.info('phpCatalogSync: columna floreria_id agregada a products');
   } catch (e) {
     if (!/Duplicate column/i.test(e.message)) logger.warn(`phpCatalogSync ensureSyncSchema: ${e.message}`);
   }
@@ -39,54 +41,62 @@ async function ensureSyncSchema() {
 
 async function findOrCreateCategoria(p, nombreCategoria) {
   const nombre = (nombreCategoria || 'General').trim();
-  const [rows] = await p.query('SELECT id FROM store_categories WHERE name = ? LIMIT 1', [nombre]);
+  const [rows] = await p.query('SELECT id FROM categories WHERE name = ? AND type = "categoria" LIMIT 1', [nombre]);
   if (rows.length) return rows[0].id;
   const [result] = await p.query(
-    'INSERT INTO store_categories (name, type, is_active) VALUES (?, "flor", 1)',
+    'INSERT INTO categories (name, type) VALUES (?, "categoria")',
     [nombre]
   );
   return result.insertId;
 }
 
-// Crea o actualiza el producto en store_products según floreria_id
+// Crea, actualiza o elimina el producto en "products" según floreria_id.
+// "products" no tiene columna is_active — si el arreglo se desactiva, se borra la fila
+// (no afecta a florería, solo deja de mostrarse en el catálogo público del PHP).
 async function syncArreglo(arreglo) {
   const p = getPool();
   if (!p) return;
 
+  const isActive = arreglo.disponible_externo === false || arreglo.disponible_externo === 0 ? false : true;
+
   try {
+    if (!isActive) {
+      await desactivarArreglo(arreglo.id);
+      return;
+    }
+
     const categoryId = await findOrCreateCategoria(p, arreglo.categoria);
     const imagePath = arreglo.imagen_url || null;
-    const isActive = arreglo.disponible_externo === false || arreglo.disponible_externo === 0 ? 0 : 1;
 
-    const [existing] = await p.query('SELECT id FROM store_products WHERE floreria_id = ? LIMIT 1', [arreglo.id]);
+    const [existing] = await p.query('SELECT id FROM products WHERE floreria_id = ? LIMIT 1', [arreglo.id]);
 
     if (existing.length) {
       await p.query(
-        `UPDATE store_products SET name=?, description=?, price=?, image_path=?, category_id=?, is_active=?
+        `UPDATE products SET name=?, description=?, price=?, image_path=?, category_id=?
          WHERE floreria_id=?`,
-        [arreglo.nombre, arreglo.descripcion || null, arreglo.precio_venta, imagePath, categoryId, isActive, arreglo.id]
+        [arreglo.nombre, arreglo.descripcion || null, arreglo.precio_venta, imagePath, categoryId, arreglo.id]
       );
-      logger.info(`phpCatalogSync: actualizado "${arreglo.nombre}" (floreria_id=${arreglo.id})`);
+      logger.info(`phpCatalogSync: actualizado "${arreglo.nombre}" en products (floreria_id=${arreglo.id})`);
     } else {
       await p.query(
-        `INSERT INTO store_products (floreria_id, name, description, price, image_path, category_id, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [arreglo.id, arreglo.nombre, arreglo.descripcion || null, arreglo.precio_venta, imagePath, categoryId, isActive]
+        `INSERT INTO products (floreria_id, name, description, price, image_path, category_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [arreglo.id, arreglo.nombre, arreglo.descripcion || null, arreglo.precio_venta, imagePath, categoryId]
       );
-      logger.info(`phpCatalogSync: creado "${arreglo.nombre}" (floreria_id=${arreglo.id})`);
+      logger.info(`phpCatalogSync: creado "${arreglo.nombre}" en products (floreria_id=${arreglo.id})`);
     }
   } catch (e) {
     logger.error(`phpCatalogSync syncArreglo: ${e.message}`);
   }
 }
 
-// Desactiva el producto en el catálogo PHP (no lo borra, igual que el soft-delete de floreria)
+// Quita el arreglo del catálogo público (borra la fila — "products" no tiene soft-delete)
 async function desactivarArreglo(catalogoId) {
   const p = getPool();
   if (!p) return;
   try {
-    await p.query('UPDATE store_products SET is_active = 0 WHERE floreria_id = ?', [catalogoId]);
-    logger.info(`phpCatalogSync: desactivado floreria_id=${catalogoId}`);
+    await p.query('DELETE FROM products WHERE floreria_id = ?', [catalogoId]);
+    logger.info(`phpCatalogSync: removido de products floreria_id=${catalogoId}`);
   } catch (e) {
     logger.error(`phpCatalogSync desactivarArreglo: ${e.message}`);
   }
