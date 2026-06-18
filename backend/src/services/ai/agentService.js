@@ -2,6 +2,9 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { query, queryOne, transaction } = require('../../config/database');
 const logger = require('../../utils/logger');
 
+if (!process.env.ANTHROPIC_API_KEY) {
+  logger.error('❌ ANTHROPIC_API_KEY no está configurada — el asistente de WhatsApp no podrá responder');
+}
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // ── Definición de herramientas ────────────────────────────────────────────────
@@ -296,6 +299,7 @@ async function buscarArreglo({ nombre }) {
 }
 
 async function registrarMerma({ nombre_insumo, cantidad, motivo, notas }) {
+  if (!cantidad || parseFloat(cantidad) <= 0) return { exito: false, mensaje: '¿Cuánto se perdió? Necesito una cantidad mayor a 0.' };
   const resultados = await buscarInsumo(nombre_insumo);
   const insumo = resultados[0] || null;
   if (!insumo) return { exito: false, mensaje: `No encontré el insumo "${nombre_insumo}". ¿Cómo se llama exactamente en el sistema?` };
@@ -484,17 +488,34 @@ async function consultarPedidos({ estado = 'pendiente' }) {
 
 async function termometroNomina() {
   const config = await queryOne('SELECT * FROM config_nomina LIMIT 1');
-  if (!config) return { mensaje: 'No hay configuración de nómina en el sistema.' };
+  if (!config) return { mensaje: 'No hay configuración de nómina en el sistema. Configurala en la app, sección "Ahorro Sueldos".' };
+
+  const salariosMonto = parseFloat(config.salarios_monto || 0);
+  const gastosMeta     = parseFloat(config.gastos_meta || 0);
+  const diasLaborales  = parseInt(config.dias_laborales || 26);
+  const numEmpleados   = parseInt(config.num_empleados || 1);
+  const meta = salariosMonto > 0 ? salariosMonto : parseFloat(config.meta_quincena || 0);
 
   const acumulado = await queryOne('SELECT COALESCE(SUM(provision_dia),0) as total FROM fondo_quincena_log WHERE cerrado = 0');
-  const avance = config.meta_quincena > 0 ? ((acumulado.total / config.meta_quincena) * 100).toFixed(1) : 0;
+  const avance = meta > 0 ? ((acumulado.total / meta) * 100).toFixed(1) : 0;
   const estado = avance >= 100 ? '🟢 META ALCANZADA' : avance >= 75 ? '🟢 Muy bien' : avance >= 40 ? '🟡 En progreso' : '🔴 Por debajo';
-  const faltante = Math.max(0, config.meta_quincena - acumulado.total);
+  const faltante = Math.max(0, meta - acumulado.total);
 
-  return {
-    meta: config.meta_quincena, acumulado: acumulado.total, porcentaje: avance, estado,
-    mensaje: `💰 *Fondo de sueldos*\nAhorrado: ₡${Number(acumulado.total).toLocaleString('es-CR')} de ₡${Number(config.meta_quincena).toLocaleString('es-CR')}\nAvance: ${avance}% — ${estado}\nFaltante: ₡${Number(faltante).toLocaleString('es-CR')}`
-  };
+  const lineas = [
+    `💰 *Fondo de sueldos*`,
+    `Ahorrado: ₡${Number(acumulado.total).toLocaleString('es-CR')} de ₡${Number(meta).toLocaleString('es-CR')}`,
+    `Avance: ${avance}% — ${estado}`,
+    `Faltante: ₡${Number(faltante).toLocaleString('es-CR')}`,
+  ];
+
+  if (gastosMeta > 0 && salariosMonto > 0) {
+    const metaMensual = gastosMeta + salariosMonto;
+    const ventaDiaria = diasLaborales > 0 ? metaMensual / diasLaborales : 0;
+    lineas.push('', `📊 *Meta de ventas del mes*`, `Gastos + salarios: ₡${Number(metaMensual).toLocaleString('es-CR')}`, `Necesitás vender ₡${Number(Math.round(ventaDiaria)).toLocaleString('es-CR')} por día (${diasLaborales} días laborales)`);
+    if (numEmpleados > 1) lineas.push(`Salario por persona: ₡${Number(Math.round(salariosMonto / numEmpleados)).toLocaleString('es-CR')}`);
+  }
+
+  return { meta, acumulado: acumulado.total, porcentaje: avance, estado, mensaje: lineas.join('\n') };
 }
 
 async function registrarVentaPersonalizada({ ingredientes, precio_venta, nombre_cliente, nombre_arreglo }) {
@@ -507,6 +528,9 @@ async function registrarVentaPersonalizada({ ingredientes, precio_venta, nombre_
   const noEncontrados = [];
 
   for (const ing of ingredientes) {
+    if (!ing.cantidad || parseFloat(ing.cantidad) <= 0) {
+      return { exito: false, mensaje: `La cantidad de "${ing.nombre_insumo}" debe ser mayor a 0.` };
+    }
     const resultados = await buscarInsumo(ing.nombre_insumo);
     const insumo = resultados[0] || null;
     if (!insumo) {
@@ -546,6 +570,9 @@ async function registrarVentaPersonalizada({ ingredientes, precio_venta, nombre_
 }
 
 async function registrarVenta({ nombre_arreglo, nombre_cliente, precio_venta, notas }) {
+  if (precio_venta !== undefined && parseFloat(precio_venta) <= 0) {
+    return { exito: false, mensaje: 'El precio de venta debe ser mayor a 0.' };
+  }
   const coincidencias = await query(
     'SELECT id, nombre, precio_venta, activo FROM catalogo WHERE nombre LIKE ? AND activo = 1 ORDER BY nombre LIMIT 5',
     [`%${nombre_arreglo}%`]
@@ -794,7 +821,7 @@ Todos los gastos categorizados. Los gastos registrados desde WhatsApp aparecen c
 Tip: los gastos fijos (luz, agua, internet) se pueden marcar como recurrentes.
 
 💵 AHORRO SUELDOS (Nómina)
-El sistema aparta automáticamente un porcentaje de cada cierre para el fondo de sueldos. El termómetro muestra el avance. Cuando ya se pagaron los sueldos, tocás "Cerrar período" para empezar a ahorrar de nuevo para la próxima quincena.
+Configurás el monto fijo de salarios del mes, el número de empleados, los gastos del mes y los días laborales. El sistema calcula la meta mensual (gastos + salarios) y cuánto hay que vender por día para alcanzarla. El termómetro de ahorro se llena automáticamente con cada cierre del día. Cuando ya se pagaron los sueldos, tocás "Cerrar período" para empezar a ahorrar de nuevo.
 
 🛒 COMPRAS
 Registrá compras a proveedores con todos los ítems. Al guardar, el stock de cada insumo se suma automáticamente y el costo unitario se actualiza si cambió. Útil para llevar el control exacto de lo que entra.
@@ -812,7 +839,7 @@ Conectá escaneando el QR o usando el código numérico de emparejamiento. Una v
 Cuatro pestañas: Ventas, Inventario, Mermas, Financiero. Elegí el período: este mes, mes anterior, últimos 30/90 días, este año o personalizado. Exportá en PDF o Excel para tener el respaldo. Las gráficas muestran la tendencia por día.
 
 ✅ CIERRE DEL DÍA
-Hacelo al terminar cada jornada con ventas. Si no lo hacés, el sistema te bloqueará al día siguiente hasta completarlo. Registra el resumen del día (ventas, gastos, mermas, utilidad), pedís cuánto hay en caja física y el sistema muestra si hay diferencia. Al cerrar, se aparta el porcentaje para sueldos automáticamente.
+Hacelo al terminar cada jornada con ventas. Si no lo hacés, el sistema te bloqueará al día siguiente hasta completarlo. Registra el resumen del día (ventas, gastos, mermas, utilidad), pedís cuánto hay en caja física y el sistema muestra si hay diferencia. Al cerrar, se aparta dinero para el fondo de sueldos automáticamente.
 Importante: si un día no hubo ventas, el cierre es opcional.`;
 }
 

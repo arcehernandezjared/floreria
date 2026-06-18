@@ -47,6 +47,25 @@ setInterval(() => {
   }
 }, 5 * 60_000).unref();
 
+// ── Deduplicación: WhatsApp puede reenviar el mismo mensaje al reconectar ────
+const seenMessageIds = new Map();
+const DEDUPE_TTL = 10 * 60_000; // 10 min
+
+function isDuplicateMessage(id) {
+  if (!id) return false;
+  const now = Date.now();
+  if (seenMessageIds.has(id)) return true;
+  seenMessageIds.set(id, now);
+  return false;
+}
+
+setInterval(() => {
+  const cutoff = Date.now() - DEDUPE_TTL;
+  for (const [id, ts] of seenMessageIds) {
+    if (ts < cutoff) seenMessageIds.delete(id);
+  }
+}, 5 * 60_000).unref();
+
 function setConnectedCallback(cb) { onConnectedCb = cb; }
 
 const AUTH_PATH = path.join(__dirname, '../../../whatsapp-auth-floreria');
@@ -250,6 +269,12 @@ async function initWhatsApp(io, phoneNumber = null, forceNew = false) {
           : jid.replace('@s.whatsapp.net', '');
         if (!numero) continue;
 
+        // Deduplicar — WhatsApp puede reenviar el mismo mensaje al reconectar
+        if (isDuplicateMessage(msg.key.id)) {
+          logger.info(`⏭️ Ignorado (duplicado) — id: ${msg.key.id}`);
+          continue;
+        }
+
         // Rate limiting
         if (checkRateLimit(numero)) {
           logger.warn(`Rate limit alcanzado: ${numero} — mensaje ignorado`);
@@ -362,7 +387,16 @@ function handleMessage(numero, texto) {
   });
 }
 
+const RESET_REGEX = /^(reiniciar|reset|empezar de nuevo|borrar conversaci[oó]n|nueva conversaci[oó]n)$/i;
+
 async function _processMessage(numero, texto) {
+  // Comando de reinicio: limpia el historial si el bot quedó confundido
+  if (RESET_REGEX.test(texto.trim())) {
+    await query('DELETE FROM wa_conversaciones WHERE numero_wa = ?', [numero]).catch(e => logger.error(`reset historial: ${e.message}`));
+    await sendMessage(numero, '🔄 Listo, empezamos de cero. ¿En qué te ayudo?');
+    return;
+  }
+
   // Los JIDs @lid no aceptan sendPresenceUpdate (causa error 500 y cae la conexión)
   const isLid = numero.includes('@lid');
   const jid   = isLid ? numero : `${numero}@s.whatsapp.net`;
