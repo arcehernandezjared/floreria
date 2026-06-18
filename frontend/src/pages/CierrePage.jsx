@@ -224,7 +224,7 @@ export default function CierrePage() {
 
         {/* Resumen del día */}
         {s && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-3 gap-3 mb-5">
             <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
               <p className="text-xs text-gray-400">Ventas</p>
               <p className="text-lg font-extrabold text-emerald-400 tabular-nums">{s.ventas_count}</p>
@@ -237,11 +237,6 @@ export default function CierrePage() {
             <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 text-center">
               <p className="text-xs text-gray-400">Mermas</p>
               <p className="text-lg font-extrabold text-orange-400 tabular-nums">{formatMoney(s.mermas_total)}</p>
-            </div>
-            <div className={`border rounded-xl p-3 text-center ${utilHoy >= 0 ? 'bg-blue-500/10 border-blue-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-              <p className="text-xs text-gray-400">Rentabilidad</p>
-              <p className={`text-lg font-extrabold tabular-nums ${utilHoy >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{formatMoney(utilHoy)}</p>
-              <p className="text-xs text-gray-600 mt-0.5">sin nómina</p>
             </div>
           </div>
         )}
