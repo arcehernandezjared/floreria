@@ -1,6 +1,7 @@
 const { query, queryOne, transaction } = require('../config/database');
 const logger = require('../utils/logger');
 const { calcularMargen } = require('../utils/helpers');
+const phpCatalogSync = require('../services/sync/phpCatalogSync');
 
 // Calcula costo de un arreglo sumando ficha × costo_unitario actual
 async function calcularCostoArreglo(catalogo_id, conn = null) {
@@ -82,6 +83,7 @@ async function createArreglo(req, res) {
       return res.status(400).json({ success: false, message: 'Nombre y precio son requeridos' });
     }
 
+    let catalogoIdCreado = null;
     await transaction(async (conn) => {
       const [result] = await conn.query(
         `INSERT INTO catalogo (nombre, descripcion, imagen_url, precio_venta, categoria, margen_minimo, disponible_externo, codigo)
@@ -89,6 +91,7 @@ async function createArreglo(req, res) {
         [nombre, descripcion || null, imagen_url || null, precio_venta, categoria || 'General', margen_minimo || 30, disponible_externo !== false ? 1 : 0, codigo || null]
       );
       const catalogoId = result.insertId;
+      catalogoIdCreado = catalogoId;
 
       if (ingredientes && ingredientes.length > 0) {
         const ingsMap = new Map();
@@ -112,6 +115,10 @@ async function createArreglo(req, res) {
       const costo = costoItems[0].reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.costo_unitario), 0);
       await conn.query('UPDATE catalogo SET costo_calculado = ? WHERE id = ?', [costo, catalogoId]);
     });
+
+    phpCatalogSync.syncArreglo({
+      id: catalogoIdCreado, nombre, descripcion, imagen_url, precio_venta, categoria, disponible_externo
+    }).catch(() => {});
 
     res.status(201).json({ success: true, message: 'Arreglo creado correctamente' });
   } catch (error) {
@@ -163,6 +170,22 @@ async function updateArreglo(req, res) {
       await conn.query('UPDATE catalogo SET costo_calculado = ? WHERE id = ?', [costo, id]);
     });
 
+    const activoFinal = activo !== undefined ? (activo ? 1 : 0) : existing.activo;
+    const disponibleFinal = disponible_externo !== undefined ? !!disponible_externo : !!existing.disponible_externo;
+    if (activoFinal === 0) {
+      phpCatalogSync.desactivarArreglo(id).catch(() => {});
+    } else {
+      phpCatalogSync.syncArreglo({
+        id,
+        nombre: nombre ?? existing.nombre,
+        descripcion: descripcion ?? existing.descripcion,
+        imagen_url: imagen_url !== undefined ? imagen_url : existing.imagen_url,
+        precio_venta: precio_venta ?? existing.precio_venta,
+        categoria: categoria ?? existing.categoria,
+        disponible_externo: disponibleFinal,
+      }).catch(() => {});
+    }
+
     res.json({ success: true, message: 'Arreglo actualizado' });
   } catch (error) {
     logger.error(`updateArreglo: ${error.message}`);
@@ -174,6 +197,7 @@ async function deleteArreglo(req, res) {
   try {
     const { id } = req.params;
     await query('UPDATE catalogo SET activo = 0 WHERE id = ?', [id]);
+    phpCatalogSync.desactivarArreglo(id).catch(() => {});
     res.json({ success: true, message: 'Arreglo desactivado' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

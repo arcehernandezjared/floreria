@@ -91,6 +91,7 @@ async function start() {
   await require('./src/controllers/catalogoController').ensureCodigo();
   await require('./src/controllers/insumoController').ensureCodigoInsumos();
   await require('./src/controllers/cierresController').ensureTable();
+  require('./src/services/sync/phpCatalogSync').ensureSyncSchema().catch(e => logger.warn(`phpCatalogSync init: ${e.message}`));
   startAlertScheduler();
 
   // Reconectar WhatsApp automáticamente si hay sesión guardada
