@@ -1,5 +1,8 @@
 const mysql = require('mysql2/promise');
 const logger = require('../../utils/logger');
+const { query } = require('../../config/database');
+
+const PHP_SITE_URL = 'https://almacaribeña.store';
 
 let pool = null;
 
@@ -102,4 +105,42 @@ async function desactivarArreglo(catalogoId) {
   }
 }
 
-module.exports = { ensureSyncSchema, syncArreglo, desactivarArreglo };
+// Importa a florería los productos que ya existían en el catálogo PHP
+// (creados directamente ahí, sin floreria_id). Idempotente: solo trae los
+// que aún no tienen vínculo, así que se puede llamar varias veces sin duplicar.
+async function importarDesdePhp() {
+  const p = getPool();
+  if (!p) return { importados: 0, mensaje: 'Catálogo PHP no configurado' };
+
+  const [productos] = await p.query('SELECT * FROM products WHERE floreria_id IS NULL');
+  const resultados = [];
+
+  for (const prod of productos) {
+    let categoriaNombre = 'General';
+    if (prod.category_id) {
+      const [cats] = await p.query('SELECT name FROM categories WHERE id = ?', [prod.category_id]);
+      if (cats.length) categoriaNombre = cats[0].name;
+    }
+
+    let imagenUrl = null;
+    if (prod.image_path) {
+      const primeraImagen = prod.image_path.split(',')[0].trim();
+      imagenUrl = primeraImagen.startsWith('http') ? primeraImagen : `${PHP_SITE_URL}/${primeraImagen}`;
+    }
+
+    const result = await query(
+      `INSERT INTO catalogo (nombre, descripcion, imagen_url, precio_venta, categoria, margen_minimo, disponible_externo)
+       VALUES (?, ?, ?, ?, ?, 30, 1)`,
+      [prod.name, prod.description || null, imagenUrl, prod.price, categoriaNombre]
+    );
+    const catalogoId = result.insertId;
+
+    await p.query('UPDATE products SET floreria_id = ? WHERE id = ?', [catalogoId, prod.id]);
+    resultados.push({ nombre: prod.name, catalogo_id: catalogoId });
+    logger.info(`phpCatalogSync importar: "${prod.name}" → catalogo_id=${catalogoId}`);
+  }
+
+  return { importados: resultados.length, productos: resultados };
+}
+
+module.exports = { ensureSyncSchema, syncArreglo, desactivarArreglo, importarDesdePhp };

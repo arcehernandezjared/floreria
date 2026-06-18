@@ -22,6 +22,7 @@ router.post('/venta', ctrl.registrarVenta);
 router.post('/venta-lote', ctrl.registrarVentaLote);
 router.post('/upload-imagen', upload.single('imagen'), ctrl.uploadImagen);
 router.post('/venta-personalizada', ctrl.ventaPersonalizada);
+router.post('/importar-php', ctrl.importarDesdePhp);
 router.get('/:id', ctrl.getArregloConFicha);
 router.post('/', ctrl.createArreglo);
 router.put('/:id', ctrl.updateArreglo);

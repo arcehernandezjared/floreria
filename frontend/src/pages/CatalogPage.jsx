@@ -534,6 +534,17 @@ export default function CatalogPage() {
     onError: (e) => toast.error(e.response?.data?.message || 'Error'),
   });
 
+  const importarPhpMut = useMutation({
+    mutationFn: () => api.post('/catalogo/importar-php'),
+    onSuccess: (res) => {
+      qc.invalidateQueries(['catalogo']);
+      const n = res.data.importados;
+      if (n > 0) toast.success(`${n} arreglo(s) importado(s) del catálogo PHP`);
+      else toast('No hay arreglos nuevos para importar', { icon: 'ℹ️' });
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al importar'),
+  });
+
   const createMut = useMutation({
     mutationFn: (data) => api.post('/catalogo', data),
     onSuccess: () => {
@@ -584,6 +595,11 @@ export default function CatalogPage() {
           <p className="text-gray-500 text-sm mt-1">Arreglos, fichas técnicas y precios</p>
         </div>
         <div className="flex gap-3">
+          <button onClick={() => importarPhpMut.mutate()} disabled={importarPhpMut.isPending}
+            className="btn-secondary">
+            <RefreshCw size={15} className={importarPhpMut.isPending ? 'animate-spin' : ''} />
+            Importar de catálogo PHP
+          </button>
           <button onClick={() => recalcularMut.mutate()} disabled={recalcularMut.isPending}
             className="btn-secondary">
             <RefreshCw size={15} className={recalcularMut.isPending ? 'animate-spin' : ''} />

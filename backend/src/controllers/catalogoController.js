@@ -515,4 +515,14 @@ async function revertirVenta(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, getVentas, uploadImagen, ventaPersonalizada, revertirVenta };
+async function importarDesdePhp(req, res) {
+  try {
+    const resultado = await phpCatalogSync.importarDesdePhp();
+    res.json({ success: true, ...resultado, message: `${resultado.importados} arreglo(s) importado(s) desde el catálogo PHP` });
+  } catch (error) {
+    logger.error(`importarDesdePhp: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, getVentas, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
