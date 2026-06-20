@@ -81,28 +81,30 @@ async function updateMerma(req, res) {
     const costoUnit        = costo_unitario != null ? parseFloat(costo_unitario) : parseFloat(merma.costo_unitario_momento);
     const costo_total      = cantidadNueva * costoUnit;
 
-    // Solo tocar el stock si la cantidad cambió
-    if (cantidadNueva !== cantidadAnterior) {
-      const insumo = await queryOne('SELECT stock_actual FROM insumos WHERE id = ?', [merma.insumo_id]);
-      if (insumo) {
-        const stockFinal = Math.max(0, parseFloat(insumo.stock_actual) + cantidadAnterior - cantidadNueva);
-        await query('UPDATE insumos SET stock_actual = ? WHERE id = ?', [stockFinal, merma.insumo_id]);
+    await transaction(async (conn) => {
+      // Solo tocar el stock si la cantidad cambió
+      if (cantidadNueva !== cantidadAnterior) {
+        const insumo = await queryOne('SELECT stock_actual FROM insumos WHERE id = ?', [merma.insumo_id]);
+        if (insumo) {
+          const stockFinal = Math.max(0, parseFloat(insumo.stock_actual) + cantidadAnterior - cantidadNueva);
+          await conn.query('UPDATE insumos SET stock_actual = ? WHERE id = ?', [stockFinal, merma.insumo_id]);
+        }
       }
-    }
 
-    await query(
-      `UPDATE mermas SET cantidad=?, costo_unitario_momento=?, costo_total=?, motivo=?, proveedor_id=?, notas=?
-       WHERE id=?`,
-      [
-        cantidadNueva,
-        costoUnit,
-        costo_total,
-        motivo          != null ? motivo          : merma.motivo,
-        proveedor_id    !== undefined ? (proveedor_id || null) : merma.proveedor_id,
-        notas           !== undefined ? (notas || null)        : merma.notas,
-        id
-      ]
-    );
+      await conn.query(
+        `UPDATE mermas SET cantidad=?, costo_unitario_momento=?, costo_total=?, motivo=?, proveedor_id=?, notas=?
+         WHERE id=?`,
+        [
+          cantidadNueva,
+          costoUnit,
+          costo_total,
+          motivo          != null ? motivo          : merma.motivo,
+          proveedor_id    !== undefined ? (proveedor_id || null) : merma.proveedor_id,
+          notas           !== undefined ? (notas || null)        : merma.notas,
+          id
+        ]
+      );
+    });
 
     res.json({ success: true, message: 'Merma actualizada' });
   } catch (error) {

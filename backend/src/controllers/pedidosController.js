@@ -98,38 +98,42 @@ async function createPedido(req, res) {
     const numero = await generarNumero();
     const itemsSum = items.reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.precio_unitario), 0);
     const precio = req.body.precio != null ? parseFloat(req.body.precio) || itemsSum : itemsSum;
-
-    const result = await query(
-      `INSERT INTO pedidos (numero, fecha, cliente_nombre, cliente_telefono, hora_entrega,
-        direccion, tipo_arreglo, tributo_numero, precio, adelanto,
-        tipo_pago, tipo_entrega, dedicatoria, observaciones)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [numero, fecha, cliente_nombre || null, cliente_telefono || null, hora_entrega || null,
-       direccion || null, tipo_arreglo || null, tributo_numero || null,
-       precio, parseFloat(adelanto) || 0,
-       tipo_pago || 'efectivo', tipo_entrega || 'tienda',
-       dedicatoria || null, observaciones || null]
-    );
-
-    await saveItems(result.insertId, items);
-
-    // Registrar adelanto como venta inmediata si hay adelanto
     const adelantoNum = parseFloat(adelanto) || 0;
-    if (adelantoNum > 0) {
-      await query(
-        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
-         VALUES (NULL, ?, ?, 0, 'pedido', ?, ?)`,
-        [
-          `Adelanto de pedido — ${tipo_arreglo || 'Pedido'}`,
-          adelantoNum,
-          cliente_nombre || null,
-          `Pedido #${numero}`
-        ]
-      );
-      logger.info(`Adelanto ₡${adelantoNum} de pedido #${numero} registrado como venta`);
-    }
 
-    res.status(201).json({ success: true, data: { id: result.insertId, numero } });
+    let pedidoId;
+    await transaction(async (conn) => {
+      const [result] = await conn.query(
+        `INSERT INTO pedidos (numero, fecha, cliente_nombre, cliente_telefono, hora_entrega,
+          direccion, tipo_arreglo, tributo_numero, precio, adelanto,
+          tipo_pago, tipo_entrega, dedicatoria, observaciones)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [numero, fecha, cliente_nombre || null, cliente_telefono || null, hora_entrega || null,
+         direccion || null, tipo_arreglo || null, tributo_numero || null,
+         precio, adelantoNum,
+         tipo_pago || 'efectivo', tipo_entrega || 'tienda',
+         dedicatoria || null, observaciones || null]
+      );
+      pedidoId = result.insertId;
+
+      await saveItems(pedidoId, items, conn);
+
+      // Registrar adelanto como venta inmediata si hay adelanto
+      if (adelantoNum > 0) {
+        await conn.query(
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
+           VALUES (NULL, ?, ?, 0, 'pedido', ?, ?)`,
+          [
+            `Adelanto de pedido — ${tipo_arreglo || 'Pedido'}`,
+            adelantoNum,
+            cliente_nombre || null,
+            `Pedido #${numero}`
+          ]
+        );
+      }
+    });
+
+    if (adelantoNum > 0) logger.info(`Adelanto ₡${adelantoNum} de pedido #${numero} registrado como venta`);
+    res.status(201).json({ success: true, data: { id: pedidoId, numero } });
   } catch (e) {
     logger.error(`createPedido: ${e.message}`);
     res.status(500).json({ success: false, message: e.message });
@@ -149,21 +153,23 @@ async function updatePedido(req, res) {
     const itemsSum = items.reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.precio_unitario), 0);
     const precio = req.body.precio != null ? parseFloat(req.body.precio) || itemsSum : itemsSum;
 
-    await query(
-      `UPDATE pedidos SET fecha=?, cliente_nombre=?, cliente_telefono=?, hora_entrega=?,
-        direccion=?, tipo_arreglo=?, tributo_numero=?, precio=?, adelanto=?,
-        tipo_pago=?, tipo_entrega=?, dedicatoria=?, observaciones=?,
-        estado=COALESCE(?,estado)
-       WHERE id=?`,
-      [fecha, cliente_nombre || null, cliente_telefono || null, hora_entrega || null,
-       direccion || null, tipo_arreglo || null, tributo_numero || null,
-       precio, parseFloat(adelanto) || 0,
-       tipo_pago || 'efectivo', tipo_entrega || 'tienda',
-       dedicatoria || null, observaciones || null,
-       estado || null, id]
-    );
+    await transaction(async (conn) => {
+      await conn.query(
+        `UPDATE pedidos SET fecha=?, cliente_nombre=?, cliente_telefono=?, hora_entrega=?,
+          direccion=?, tipo_arreglo=?, tributo_numero=?, precio=?, adelanto=?,
+          tipo_pago=?, tipo_entrega=?, dedicatoria=?, observaciones=?,
+          estado=COALESCE(?,estado)
+         WHERE id=?`,
+        [fecha, cliente_nombre || null, cliente_telefono || null, hora_entrega || null,
+         direccion || null, tipo_arreglo || null, tributo_numero || null,
+         precio, parseFloat(adelanto) || 0,
+         tipo_pago || 'efectivo', tipo_entrega || 'tienda',
+         dedicatoria || null, observaciones || null,
+         estado || null, id]
+      );
 
-    await saveItems(id, items);
+      await saveItems(id, items, conn);
+    });
 
     res.json({ success: true, message: 'Pedido actualizado' });
   } catch (e) {

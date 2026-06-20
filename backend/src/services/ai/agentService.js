@@ -308,11 +308,13 @@ async function registrarMerma({ nombre_insumo, cantidad, motivo, notas }) {
   }
 
   const costo_total = parseFloat((cantidad * insumo.costo_unitario).toFixed(2));
-  await query(
-    'INSERT INTO mermas (insumo_id, cantidad, costo_unitario_momento, costo_total, motivo, notas) VALUES (?, ?, ?, ?, ?, ?)',
-    [insumo.id, cantidad, insumo.costo_unitario, costo_total, motivo, notas || null]
-  );
-  await query('UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?', [cantidad, insumo.id]);
+  await transaction(async (conn) => {
+    await conn.query(
+      'INSERT INTO mermas (insumo_id, cantidad, costo_unitario_momento, costo_total, motivo, notas) VALUES (?, ?, ?, ?, ?, ?)',
+      [insumo.id, cantidad, insumo.costo_unitario, costo_total, motivo, notas || null]
+    );
+    await conn.query('UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?', [cantidad, insumo.id]);
+  });
 
   const motivoLabels = {
     marchita_tienda: 'marchita en tienda', danada_armar: 'dañada al armar',
