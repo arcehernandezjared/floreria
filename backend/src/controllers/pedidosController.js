@@ -237,9 +237,10 @@ async function updateEstado(req, res) {
       );
 
     } else if (estado !== 'entregado' && pedido.estado === 'entregado') {
-      // ── Revertir saldo al adelanto original ──────────────────────────────
+      // ── Revertir saldo al adelanto original y permitir registrar la venta de nuevo
+      //    si vuelve a marcarse como entregado (ventas_registradas=0) ──────────
       await query(
-        `UPDATE pedidos SET estado = ?, adelanto = COALESCE(adelanto_original, adelanto), adelanto_original = NULL WHERE id = ?`,
+        `UPDATE pedidos SET estado = ?, adelanto = COALESCE(adelanto_original, adelanto), adelanto_original = NULL, ventas_registradas = 0 WHERE id = ?`,
         [estado, id]
       );
 
