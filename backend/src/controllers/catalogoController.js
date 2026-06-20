@@ -560,6 +560,12 @@ async function revertirVenta(req, res) {
             [ing.cantidad, ing.insumo_id]
           );
         }
+      } else if (venta.insumo_id) {
+        // Venta de insumo suelto (flor/material vendido directo) — restaurar su stock
+        await conn.query(
+          'UPDATE insumos SET stock_actual = stock_actual + ? WHERE id = ?',
+          [venta.cantidad_insumo, venta.insumo_id]
+        );
       }
       await conn.query('DELETE FROM ventas_floreria WHERE id = ?', [id]);
     });

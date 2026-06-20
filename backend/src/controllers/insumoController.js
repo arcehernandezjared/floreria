@@ -1,4 +1,4 @@
-const { query, queryOne } = require('../config/database');
+const { query, queryOne, transaction } = require('../config/database');
 const logger = require('../utils/logger');
 const { v2: cloudinary } = require('cloudinary');
 
@@ -17,6 +17,13 @@ async function ensureCodigoInsumos() {
   } catch (_) {}
   try {
     await query('ALTER TABLE insumos ADD COLUMN precio_venta DECIMAL(10,2) NULL DEFAULT NULL');
+  } catch (_) {}
+  // Vínculo para poder restaurar stock al revertir una venta de insumo suelto
+  try {
+    await query('ALTER TABLE ventas_floreria ADD COLUMN insumo_id INT NULL DEFAULT NULL');
+  } catch (_) {}
+  try {
+    await query('ALTER TABLE ventas_floreria ADD COLUMN cantidad_insumo DECIMAL(10,4) NULL DEFAULT NULL');
   } catch (_) {}
 }
 
@@ -244,39 +251,50 @@ async function ventaDirecta(req, res) {
       return res.status(400).json({ success: false, message: 'Se requieren items' });
     }
 
+    // ── Validar TODO primero, sin escribir nada — evita ventas parciales ──────
+    const insumosMap = {};
     for (const item of items) {
-      const { insumo_id, cantidad, precio_unitario } = item;
-      const insumo = await queryOne('SELECT * FROM insumos WHERE id = ? AND activo = 1', [insumo_id]);
-      if (!insumo) return res.status(404).json({ success: false, message: `Insumo ${insumo_id} no encontrado` });
-
-      if (parseFloat(insumo.stock_actual) < parseFloat(cantidad)) {
+      const insumo = await queryOne('SELECT * FROM insumos WHERE id = ? AND activo = 1', [item.insumo_id]);
+      if (!insumo) return res.status(404).json({ success: false, message: `Insumo ${item.insumo_id} no encontrado` });
+      if (parseFloat(insumo.stock_actual) < parseFloat(item.cantidad)) {
         return res.status(400).json({
           success: false,
           message: `Stock insuficiente para ${insumo.nombre} (disponible: ${insumo.stock_actual} ${insumo.unidad})`
         });
       }
-
-      await query(
-        'UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?',
-        [cantidad, insumo_id]
-      );
-
-      const precioConDesc = parseFloat(precio_unitario) * (1 - parseFloat(descuento) / 100);
-      const precioTotal = precioConDesc * parseFloat(cantidad);
-      const costoTotal = parseFloat(insumo.costo_unitario) * parseFloat(cantidad);
-
-      await query(
-        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente)
-         VALUES (NULL, ?, ?, ?, ?, ?)`,
-        [
-          `${insumo.nombre} \xD7${fmtCantidad(cantidad)} ${insumo.unidad}`,
-          canal || 'mostrador',
-          precioTotal,
-          costoTotal,
-          nombre_cliente || 'Cliente mostrador'
-        ]
-      );
+      insumosMap[item.insumo_id] = insumo;
     }
+
+    // ── Todo o nada: una sola transacción para todos los items ────────────────
+    await transaction(async (conn) => {
+      for (const item of items) {
+        const insumo = insumosMap[item.insumo_id];
+        const cantidad = parseFloat(item.cantidad);
+
+        await conn.query(
+          'UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?',
+          [cantidad, item.insumo_id]
+        );
+
+        const precioConDesc = parseFloat(item.precio_unitario) * (1 - parseFloat(descuento) / 100);
+        const precioTotal = precioConDesc * cantidad;
+        const costoTotal = parseFloat(insumo.costo_unitario) * cantidad;
+
+        await conn.query(
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, insumo_id, cantidad_insumo)
+           VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            `${insumo.nombre} \xD7${fmtCantidad(cantidad)} ${insumo.unidad}`,
+            canal || 'mostrador',
+            precioTotal,
+            costoTotal,
+            nombre_cliente || 'Cliente mostrador',
+            item.insumo_id,
+            cantidad
+          ]
+        );
+      }
+    });
 
     res.json({ success: true, message: `${items.length} item(s) vendidos correctamente` });
   } catch (error) {
