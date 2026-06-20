@@ -33,6 +33,14 @@ async function ensureCanalPedido() {
   } catch (e) {
     logger.warn(`ensureCanalPedido: ${e.message}`);
   }
+  // Reclasifica retroactivamente las ventas que ya existían como adelanto/saldo de pedido
+  // (se identifican por la nota "Pedido #N" que se les asigna siempre al crearlas)
+  try {
+    const result = await query(`UPDATE ventas_floreria SET canal = 'pedido' WHERE notas LIKE 'Pedido #%' AND canal != 'pedido'`);
+    if (result.affectedRows > 0) logger.info(`ensureCanalPedido: ${result.affectedRows} venta(s) reclasificadas a canal 'pedido'`);
+  } catch (e) {
+    logger.warn(`ensureCanalPedido retroactivo: ${e.message}`);
+  }
 }
 
 async function getCatalogo(req, res) {
