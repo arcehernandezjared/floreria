@@ -13,6 +13,7 @@ const CANAL_LABELS = {
   mostrador: { label: 'Mostrador', icon: Store,        color: 'text-blue-400 bg-blue-500/10' },
   externo:   { label: 'Externo',   icon: ShoppingCart, color: 'text-purple-400 bg-purple-500/10' },
   whatsapp:  { label: 'WhatsApp',  icon: MessageSquare, color: 'text-green-400 bg-green-500/10' },
+  pedido:    { label: 'Pedidos',   icon: Package,       color: 'text-amber-400 bg-amber-500/10' },
 };
 
 function hoy()      { return new Date().toISOString().split('T')[0]; }
@@ -492,6 +493,7 @@ export default function RegistroVentasPage() {
             <option value="mostrador">Mostrador</option>
             <option value="externo">Externo</option>
             <option value="whatsapp">WhatsApp</option>
+            <option value="pedido">Pedidos</option>
           </select>
         </div>
         <div className="ml-auto text-xs text-gray-600">
@@ -645,6 +647,7 @@ export default function RegistroVentasPage() {
               <span className="text-gray-500">Mostrador: <span className="text-white font-medium">{ventas.filter(v => v.canal === 'mostrador').length}</span></span>
               <span className="text-gray-500">Externo: <span className="text-white font-medium">{ventas.filter(v => v.canal === 'externo').length}</span></span>
               <span className="text-gray-500">WhatsApp: <span className="text-white font-medium">{ventas.filter(v => v.canal === 'whatsapp').length}</span></span>
+              <span className="text-gray-500">Pedidos: <span className="text-white font-medium">{ventas.filter(v => v.canal === 'pedido').length}</span></span>
             </div>
           </div>
         )}

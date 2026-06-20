@@ -118,7 +118,7 @@ async function createPedido(req, res) {
     if (adelantoNum > 0) {
       await query(
         `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
-         VALUES (NULL, ?, ?, 0, 'mostrador', ?, ?)`,
+         VALUES (NULL, ?, ?, 0, 'pedido', ?, ?)`,
         [
           `Adelanto de pedido — ${tipo_arreglo || 'Pedido'}`,
           adelantoNum,
@@ -230,7 +230,7 @@ async function updateEstado(req, res) {
                 `Saldo pedido — ${nombreVenta}`,
                 saldoPendiente,
                 costoTotal,
-                'mostrador',
+                'pedido',
                 pedido.cliente_nombre || null,
                 `Pedido #${pedido.numero}`
               ]

@@ -26,6 +26,15 @@ async function ensureCodigo() {
   } catch (_) {}
 }
 
+// Agrega 'pedido' como canal válido — ventas generadas por adelanto/saldo de pedidos
+async function ensureCanalPedido() {
+  try {
+    await query(`ALTER TABLE ventas_floreria MODIFY COLUMN canal ENUM('mostrador','externo','whatsapp','pedido') NOT NULL DEFAULT 'mostrador'`);
+  } catch (e) {
+    logger.warn(`ensureCanalPedido: ${e.message}`);
+  }
+}
+
 async function getCatalogo(req, res) {
   try {
     const arreglos = await query(
@@ -565,4 +574,4 @@ async function importarDesdePhp(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
+module.exports = { ensureCodigo, ensureCanalPedido, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
