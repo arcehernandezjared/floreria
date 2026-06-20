@@ -6,7 +6,6 @@ import {
   Camera, ImagePlus
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import api, { formatMoney } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -45,210 +44,112 @@ function fmtQty(n) {
 
 function generarReciboPOS(snap) {
   const { numero, items, cliente, canal, descuento, subtotalProductos, manoDeObra, subtotal, descuentoMonto, total, fecha } = snap;
-  const doc = new jsPDF({ unit: 'mm', format: 'a5', orientation: 'portrait' });
-  const W = doc.internal.pageSize.getWidth();
-  const H = doc.internal.pageSize.getHeight();
-  const canalLabel = CANALES.find(c => c.value === canal)?.label || canal;
+  const canalLabel = (CANALES.find(c => c.value === canal)?.label || canal || '').toUpperCase();
 
-  // ── Paleta ──────────────────────────────────────────────────────────────
-  const ROSE    = [156, 0, 70];
-  const ROSEMID = [212, 0, 110];
-  const ROSELIT = [253, 243, 249];
-  const DARK    = [20, 20, 20];
-  const GRAY    = [110, 110, 110];
-  const WHITE   = [255, 255, 255];
+  // Formato ticket térmico 80mm — monocromo, monoespaciado, estilo punto de venta
+  const W = 80;
+  const doc = new jsPDF({ unit: 'mm', format: [W, 250], orientation: 'portrait' });
 
-  // ── Barra de acento superior ─────────────────────────────────────────────
-  doc.setFillColor(...ROSEMID);
-  doc.rect(0, 0, W, 4, 'F');
+  const M = 4;
+  const R = W - M;
+  let y = 8;
 
-  // ── Header blanco ────────────────────────────────────────────────────────
-  // Icono floral (6 pétalos + centro)
-  const fx = 18, fy = 22;
-  doc.setFillColor(...ROSEMID);
-  [0, 60, 120, 180, 240, 300].forEach(a => {
-    const r = a * Math.PI / 180;
-    doc.circle(fx + Math.cos(r) * 3.8, fy + Math.sin(r) * 3.8, 2.3, 'F');
-  });
-  doc.setFillColor(255, 180, 220);
-  doc.circle(fx, fy, 2.1, 'F');
+  doc.setFont('courier', 'normal');
+  doc.setTextColor(0, 0, 0);
 
-  // Nombre y datos del negocio
-  doc.setTextColor(...ROSE);
-  doc.setFontSize(17);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Floristeria Alma Caribe\xF1a', 30, 18);
-  doc.setTextColor(...GRAY);
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Siquirres, Lim\xF3n, Costa Rica  |  Flores con alma', 30, 25);
-  doc.text('WhatsApp / Instagram: @almacaribe\xF1a', 30, 31);
+  const dashed = () => {
+    doc.setLineDashPattern([0.7, 0.7], 0);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    doc.line(M, y, R, y);
+    doc.setLineDashPattern([], 0);
+    y += 4.5;
+  };
 
-  // Separador elegante con puntos
-  doc.setDrawColor(...ROSEMID);
-  doc.setLineWidth(0.6);
-  doc.line(12, 40, W - 12, 40);
-  doc.setFillColor(...ROSEMID);
-  doc.circle(12, 40, 1, 'F');
-  doc.circle(W - 12, 40, 1, 'F');
-
-  // ── Tipo de comprobante ──────────────────────────────────────────────────
-  doc.setTextColor(...GRAY);
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text('RECIBO DE COMPRA', W / 2, 49, { align: 'center' });
-
-  // Número a la izquierda
-  doc.setTextColor(...GRAY);
-  doc.setFontSize(6.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text('N\xBA', 14, 57);
-  doc.setTextColor(...DARK);
+  // ── Encabezado ──────────────────────────────────────────────────────────
+  doc.setFont('courier', 'bold');
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text(numero, 14, 65);
-
-  // Fecha y canal a la derecha
-  doc.setTextColor(...GRAY);
-  doc.setFontSize(6.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text('FECHA', W - 14, 57, { align: 'right' });
-  doc.setTextColor(...DARK);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text(fecha, W - 14, 64, { align: 'right' });
-  doc.setTextColor(...GRAY);
+  doc.text('FLORISTERIA ALMA', W / 2, y, { align: 'center' }); y += 4.2;
+  doc.text('CARIBE\xD1A', W / 2, y, { align: 'center' }); y += 5;
+  doc.setFont('courier', 'normal');
   doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(canalLabel, W - 14, 70, { align: 'right' });
+  doc.text('Siquirres, Lim\xF3n, Costa Rica', W / 2, y, { align: 'center' }); y += 3.6;
+  doc.text('WhatsApp/IG: @almacaribe\xF1a', W / 2, y, { align: 'center' }); y += 4.5;
 
-  // Separador suave
-  doc.setDrawColor(230, 205, 220);
-  doc.setLineWidth(0.25);
-  doc.line(12, 74, W - 12, 74);
+  dashed();
 
-  // ── Cliente ──────────────────────────────────────────────────────────────
-  let y;
+  // ── Datos del comprobante ─────────────────────────────────────────────────
+  doc.setFontSize(7.5);
+  doc.setFont('courier', 'bold');
+  doc.text('RECIBO DE VENTA', M, y);
+  doc.setFont('courier', 'normal');
+  doc.text(numero, R, y, { align: 'right' }); y += 4;
+  doc.text(fecha, M, y);
+  doc.text(canalLabel, R, y, { align: 'right' }); y += 4;
+
   const clienteLabel = cliente && cliente !== 'Cliente mostrador' ? cliente : null;
   if (clienteLabel) {
-    doc.setFillColor(...ROSELIT);
-    doc.roundedRect(12, 77, W - 24, 13, 1.5, 1.5, 'F');
-    doc.setDrawColor(225, 195, 215);
-    doc.setLineWidth(0.2);
-    doc.roundedRect(12, 77, W - 24, 13, 1.5, 1.5, 'D');
-    doc.setTextColor(...ROSE);
-    doc.setFontSize(6.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text('CLIENTE', 17, 83);
-    doc.setTextColor(...DARK);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(clienteLabel, 17, 88);
-    y = 96;
-  } else {
-    y = 80;
+    doc.text(`Cliente: ${clienteLabel}`, M, y); y += 4;
   }
 
-  // ── Tabla de productos ────────────────────────────────────────────────────
-  const tableData = items.map(i => {
-    const precio = i.tipo === 'insumo' ? i.precio_unitario : i.precio_venta;
-    return [
-      i.nombre + (i.tipo === 'insumo' ? ' (suelta)' : ''),
-      fmtQty(i.cantidad),
-      fmtCRC(precio),
-      fmtCRC(precio * i.cantidad),
-    ];
+  dashed();
+
+  // ── Detalle (multi-item) ───────────────────────────────────────────────────
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(7);
+  doc.text('DESCRIPCION', M, y);
+  doc.text('TOTAL', R, y, { align: 'right' }); y += 4;
+
+  items.forEach(i => {
+    const precioU = i.tipo === 'insumo' ? i.precio_unitario : i.precio_venta;
+    const nombre  = i.nombre + (i.tipo === 'insumo' ? ' (suelta)' : '');
+    const lineas  = doc.splitTextToSize(nombre, R - M - 2);
+
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8);
+    lineas.forEach((linea, idx) => {
+      doc.text(linea, M, y);
+      if (idx === 0) doc.text(fmtCRC(precioU * i.cantidad), R, y, { align: 'right' });
+      y += 4;
+    });
+    doc.setFontSize(7);
+    doc.text(`  ${fmtQty(i.cantidad)} x ${fmtCRC(precioU)}`, M, y); y += 4.5;
   });
 
-  autoTable(doc, {
-    startY: y,
-    head: [['Descripci\xF3n', 'Cant.', 'Precio', 'Total']],
-    body: tableData,
-    theme: 'plain',
-    styles: {
-      fontSize: 8.5,
-      cellPadding: { top: 5, bottom: 5, left: 4, right: 4 },
-      textColor: [...DARK],
-      lineColor: [230, 205, 220],
-      lineWidth: 0.25,
-    },
-    headStyles: {
-      fillColor: [...ROSE],
-      textColor: [...WHITE],
-      fontStyle: 'bold',
-      fontSize: 7.5,
-      cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
-    },
-    alternateRowStyles: { fillColor: [...ROSELIT] },
-    columnStyles: {
-      0: { cellWidth: 'auto' },
-      1: { cellWidth: 13, halign: 'center' },
-      2: { cellWidth: 30, halign: 'right' },
-      3: { cellWidth: 30, halign: 'right', fontStyle: 'bold', textColor: [...ROSE] },
-    },
-    margin: { left: 12, right: 12 },
-  });
+  dashed();
 
-  y = doc.lastAutoTable.finalY + 8;
-
-  // ── Subtotal, descuento y total ───────────────────────────────────────────
-  doc.setFont('helvetica', 'normal');
+  // ── Subtotal, mano de obra, descuento y total ─────────────────────────────
+  doc.setFont('courier', 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  doc.text('Subtotal:', W - 50, y);
-  doc.setTextColor(...DARK);
-  doc.text(fmtCRC(subtotalProductos ?? subtotal), W - 14, y, { align: 'right' });
+  doc.text('SUBTOTAL', M, y);
+  doc.text(fmtCRC(subtotalProductos ?? subtotal), R, y, { align: 'right' }); y += 4.5;
 
   if (manoDeObra > 0) {
-    y += 7;
-    doc.setTextColor(...GRAY);
-    doc.text('Mano de obra:', W - 60, y);
-    doc.setTextColor(...DARK);
-    doc.text(fmtCRC(manoDeObra), W - 14, y, { align: 'right' });
+    doc.text('MANO DE OBRA', M, y);
+    doc.text(fmtCRC(manoDeObra), R, y, { align: 'right' }); y += 4.5;
   }
 
   if (descuento > 0) {
-    y += 7;
-    doc.setTextColor(200, 50, 50);
-    doc.text(`Descuento (${descuento}%):`, W - 60, y);
-    doc.text(`- ${fmtCRC(descuentoMonto)}`, W - 14, y, { align: 'right' });
+    doc.text(`DESCUENTO (${descuento}%)`, M, y);
+    doc.text(`-${fmtCRC(descuentoMonto)}`, R, y, { align: 'right' }); y += 4.5;
   }
 
-  y += 6;
-  doc.setDrawColor(220, 195, 210);
-  doc.setLineWidth(0.25);
-  doc.line(W - 64, y, W - 12, y);
+  y += 1.5;
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(12);
+  doc.text('TOTAL', M, y);
+  doc.text(fmtCRC(total), R, y, { align: 'right' }); y += 5.5;
 
-  y += 5;
-  // Caja TOTAL — elegante, ancho completo
-  doc.setFillColor(...ROSE);
-  doc.roundedRect(12, y, W - 24, 14, 2, 2, 'F');
-  doc.setTextColor(...WHITE);
-  doc.setFont('helvetica', 'bold');
+  dashed();
+
+  // ── Pie ────────────────────────────────────────────────────────────────────
+  doc.setFont('courier', 'bold');
   doc.setFontSize(8.5);
-  doc.text('TOTAL A PAGAR', 18, y + 9);
-  doc.setFontSize(11);
-  doc.text(fmtCRC(total), W - 17, y + 9, { align: 'right' });
-
-  // ── Footer ────────────────────────────────────────────────────────────────
-  doc.setFillColor(...ROSELIT);
-  doc.rect(0, H - 28, W, 28, 'F');
-  doc.setDrawColor(...ROSEMID);
-  doc.setLineWidth(0.5);
-  doc.line(12, H - 28, W - 12, H - 28);
-  doc.setFillColor(...ROSEMID);
-  doc.circle(12, H - 28, 0.9, 'F');
-  doc.circle(W - 12, H - 28, 0.9, 'F');
-
-  doc.setTextColor(...ROSE);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
-  doc.text('\xA1Gracias por su preferencia!', W / 2, H - 18, { align: 'center' });
-  doc.setTextColor(...GRAY);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text('Siquirres, Lim\xF3n, Costa Rica', W / 2, H - 12, { align: 'center' });
-  doc.text('Floristeria Alma Caribe\xF1a  |  Flores con alma', W / 2, H - 6, { align: 'center' });
+  doc.text('GRACIAS POR SU COMPRA', W / 2, y, { align: 'center' }); y += 5;
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(6.5);
+  doc.text('Floristeria Alma Caribe\xF1a', W / 2, y, { align: 'center' }); y += 3.5;
+  doc.text('Flores con alma', W / 2, y, { align: 'center' }); y += 6;
 
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
