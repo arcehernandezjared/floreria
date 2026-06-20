@@ -16,6 +16,7 @@ router.use(authMiddleware);
 
 router.get('/', ctrl.getCatalogo);
 router.get('/ventas', ctrl.getVentas);
+router.get('/ventas/:id/detalle', ctrl.getVentaDetalle);
 router.delete('/ventas/:id', ctrl.revertirVenta);
 router.post('/recalcular-costos', ctrl.recalcularCostos);
 router.post('/venta', ctrl.registrarVenta);

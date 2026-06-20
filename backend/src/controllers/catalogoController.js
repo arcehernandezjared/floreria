@@ -394,6 +394,46 @@ async function getVentas(req, res) {
   }
 }
 
+async function getVentaDetalle(req, res) {
+  try {
+    const { id } = req.params;
+    const venta = await queryOne(
+      `SELECT v.*, c.nombre as arreglo_nombre
+       FROM ventas_floreria v LEFT JOIN catalogo c ON v.catalogo_id = c.id
+       WHERE v.id = ?`,
+      [id]
+    );
+    if (!venta) return res.status(404).json({ success: false, message: 'Venta no encontrada' });
+
+    // Si la venta corresponde a un arreglo del catálogo, traer su receta
+    let ingredientes = [];
+    if (venta.catalogo_id) {
+      ingredientes = await query(
+        `SELECT fi.cantidad, i.nombre as insumo_nombre, i.unidad, i.costo_unitario,
+                (fi.cantidad * i.costo_unitario) as subtotal
+         FROM ficha_ingredientes fi JOIN insumos i ON fi.insumo_id = i.id
+         WHERE fi.catalogo_id = ?`,
+        [venta.catalogo_id]
+      );
+    }
+
+    // Si la venta viene de un adelanto/saldo de pedido, traer el pedido y sus items
+    let pedido = null;
+    const match = (venta.notas || '').match(/Pedido #(\d+)/);
+    if (match) {
+      pedido = await queryOne('SELECT * FROM pedidos WHERE numero = ?', [match[1]]);
+      if (pedido) {
+        pedido.items = await query('SELECT * FROM pedido_items WHERE pedido_id = ? ORDER BY id', [pedido.id]);
+      }
+    }
+
+    res.json({ success: true, data: { ...venta, ingredientes, pedido } });
+  } catch (error) {
+    logger.error(`getVentaDetalle: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 const { v2: cloudinary } = require('cloudinary');
 
 cloudinary.config({
@@ -525,4 +565,4 @@ async function importarDesdePhp(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, getVentas, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
+module.exports = { ensureCodigo, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, ShoppingBag, Filter,
-  MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send, Plus, RotateCcw
+  MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send, Plus, RotateCcw, Eye,
+  Flower2, Package, MapPin, Calendar
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import api from '../utils/api';
@@ -265,6 +266,149 @@ function ModalVentaManual({ onClose, onSave, isPending }) {
   );
 }
 
+function ModalDetalleVenta({ ventaId, onClose }) {
+  const { data: detalle, isLoading } = useQuery({
+    queryKey: ['venta-detalle', ventaId],
+    queryFn: () => api.get(`/catalogo/ventas/${ventaId}/detalle`).then(r => r.data.data),
+    enabled: !!ventaId,
+  });
+
+  const precio = parseFloat(detalle?.precio_venta || 0);
+  const costo  = parseFloat(detalle?.costo_produccion || 0);
+  const margen = precio > 0 ? (((precio - costo) / precio) * 100).toFixed(1) : 0;
+  const fecha  = detalle?.fecha
+    ? new Date(detalle.fecha).toLocaleString('es-CR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '';
+  const numero = detalle ? `VTA-${new Date(detalle.fecha).getFullYear()}-${String(detalle.id).padStart(6, '0')}` : '';
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 p-4 overflow-y-auto">
+      <div className="card w-full max-w-lg my-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Detalle de venta</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
+
+        {isLoading ? (
+          <p className="text-center text-gray-500 py-8 text-sm">Cargando...</p>
+        ) : !detalle ? (
+          <p className="text-center text-gray-500 py-8 text-sm">No se pudo cargar el detalle</p>
+        ) : (
+          <div className="space-y-4">
+            {/* Info general */}
+            <div className="grid grid-cols-2 gap-3 text-sm bg-gray-800/40 rounded-xl p-3">
+              <div><p className="text-xs text-gray-500">N°</p><p className="text-white font-semibold">{numero}</p></div>
+              <div><p className="text-xs text-gray-500">Fecha</p><p className="text-white">{fecha}</p></div>
+              <div><p className="text-xs text-gray-500">Cliente</p><p className="text-white">{detalle.nombre_cliente || '—'}</p></div>
+              <div><p className="text-xs text-gray-500">Canal</p><p className="text-white capitalize">{detalle.canal}</p></div>
+            </div>
+
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Concepto</p>
+              <p className="text-white font-medium">{detalle.nombre_arreglo}</p>
+              {detalle.notas && <p className="text-xs text-gray-500 mt-1">{detalle.notas}</p>}
+            </div>
+
+            {/* Receta del arreglo (ventas con catalogo_id) */}
+            {detalle.ingredientes?.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Flower2 size={14} className="text-brand-400" />
+                  <p className="text-sm font-semibold text-white">Receta del arreglo</p>
+                </div>
+                <div className="rounded-xl border border-gray-800 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead><tr className="bg-gray-800/50">
+                      <th className="text-left px-3 py-2 text-xs text-gray-400">Insumo</th>
+                      <th className="text-right px-3 py-2 text-xs text-gray-400">Cant.</th>
+                      <th className="text-right px-3 py-2 text-xs text-gray-400">Subtotal</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-gray-800/60">
+                      {detalle.ingredientes.map((ing, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-2 text-gray-300">{ing.insumo_nombre}</td>
+                          <td className="px-3 py-2 text-right text-gray-400">{parseFloat(ing.cantidad)} {ing.unidad}</td>
+                          <td className="px-3 py-2 text-right text-yellow-400">₡{parseFloat(ing.subtotal).toLocaleString('es-CR')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Pedido vinculado (ventas de adelanto/saldo de un pedido) */}
+            {detalle.pedido && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Package size={14} className="text-purple-400" />
+                  <p className="text-sm font-semibold text-white">Pedido #{detalle.pedido.numero}</p>
+                  <span className="badge badge-blue text-xs capitalize">{detalle.pedido.estado}</span>
+                </div>
+                <div className="bg-gray-800/40 rounded-xl p-3 space-y-1.5 text-sm mb-2">
+                  {detalle.pedido.fecha && (
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <Calendar size={12} />
+                      Entrega: {new Date(detalle.pedido.fecha).toLocaleDateString('es-CR')}
+                      {detalle.pedido.hora_entrega ? ` · ${detalle.pedido.hora_entrega}` : ''}
+                    </div>
+                  )}
+                  {detalle.pedido.direccion && (
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <MapPin size={12} /> {detalle.pedido.direccion}
+                    </div>
+                  )}
+                  <div className="text-gray-400">
+                    Total del pedido: <span className="text-white font-semibold">₡{parseFloat(detalle.pedido.precio).toLocaleString('es-CR')}</span>
+                  </div>
+                </div>
+                {detalle.pedido.items?.length > 0 && (
+                  <div className="rounded-xl border border-gray-800 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead><tr className="bg-gray-800/50">
+                        <th className="text-left px-3 py-2 text-xs text-gray-400">Item del pedido</th>
+                        <th className="text-right px-3 py-2 text-xs text-gray-400">Cant.</th>
+                        <th className="text-right px-3 py-2 text-xs text-gray-400">Subtotal</th>
+                      </tr></thead>
+                      <tbody className="divide-y divide-gray-800/60">
+                        {detalle.pedido.items.map((it, i) => (
+                          <tr key={i}>
+                            <td className="px-3 py-2 text-gray-300">{it.nombre}</td>
+                            <td className="px-3 py-2 text-right text-gray-400">{parseFloat(it.cantidad)}</td>
+                            <td className="px-3 py-2 text-right text-yellow-400">₡{parseFloat(it.subtotal).toLocaleString('es-CR')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Totales */}
+            <div className="border-t border-gray-800 pt-3 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Costo de producción</span>
+                <span className="text-gray-300">₡{costo.toLocaleString('es-CR')}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Margen</span>
+                <span className={`font-semibold ${margen >= 30 ? 'text-emerald-400' : margen >= 15 ? 'text-yellow-400' : 'text-red-400'}`}>{margen}%</span>
+              </div>
+              <div className="flex justify-between text-base font-bold pt-1">
+                <span className="text-white">Precio de venta</span>
+                <span className="text-emerald-400">₡{precio.toLocaleString('es-CR')}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button onClick={onClose} className="btn-secondary w-full justify-center mt-4">Cerrar</button>
+      </div>
+    </div>
+  );
+}
+
 export default function RegistroVentasPage() {
   const qc = useQueryClient();
   const [desde, setDesde]         = useState(inicioMes());
@@ -272,6 +416,7 @@ export default function RegistroVentasPage() {
   const [canal, setCanal]         = useState('todos');
   const [modalEmail, setModalEmail] = useState(null);
   const [modalManual, setModalManual] = useState(false);
+  const [modalDetalle, setModalDetalle] = useState(null);
   const [confirmRevertir, setConfirmRevertir] = useState(null);
 
   const params = new URLSearchParams({ desde, hasta });
@@ -407,6 +552,9 @@ export default function RegistroVentasPage() {
                       {v.nombre_cliente && <span className="text-xs text-gray-500 truncate max-w-32">{v.nombre_cliente}</span>}
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
+                      <button onClick={() => setModalDetalle(v.id)} title="Ver detalle" className="p-2 rounded-lg text-gray-500 hover:text-brand-400 hover:bg-brand-500/10">
+                        <Eye size={15} />
+                      </button>
                       <button onClick={() => generarReciboPDF(v)} title="Reimprimir" className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-gray-700">
                         <Printer size={15} />
                       </button>
@@ -469,6 +617,9 @@ export default function RegistroVentasPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => setModalDetalle(v.id)} title="Ver detalle" className="p-1.5 rounded-lg text-gray-500 hover:text-brand-400 hover:bg-brand-500/10 transition-colors">
+                          <Eye size={15} />
+                        </button>
                         <button onClick={() => generarReciboPDF(v)} title="Reimprimir recibo" className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-700 transition-colors">
                           <Printer size={15} />
                         </button>
@@ -498,6 +649,9 @@ export default function RegistroVentasPage() {
           </div>
         )}
       </div>
+
+      {/* Modal detalle */}
+      {modalDetalle && <ModalDetalleVenta ventaId={modalDetalle} onClose={() => setModalDetalle(null)} />}
 
       {/* Modal email */}
       {modalEmail && <ModalEmail venta={modalEmail} onClose={() => setModalEmail(null)} />}
