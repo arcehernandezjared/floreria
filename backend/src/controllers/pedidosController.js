@@ -1,4 +1,4 @@
-const { query, queryOne } = require('../config/database');
+const { query, queryOne, transaction } = require('../config/database');
 const logger = require('../utils/logger');
 
 async function ensureTable() {
@@ -183,19 +183,31 @@ async function updateEstado(req, res) {
       // ── Registrar UNA venta por pedido con el precio total real ──────────
       const items = await query('SELECT * FROM pedido_items WHERE pedido_id = ?', [id]);
 
-      // Calcular costo total de producción sumando todos los items
+      // Calcular costo total de producción y acumular insumos a descontar del inventario
       let costoTotal = 0;
+      const descuentos = new Map(); // insumo_id -> cantidad total a restar
+
       for (const item of items) {
+        const cantidadItem = parseFloat(item.cantidad) || 1;
         if (item.tipo === 'arreglo') {
-          const costoRow = await queryOne(
-            `SELECT COALESCE(SUM(fi.cantidad * i.costo_unitario), 0) as costo
+          const ingredientes = await query(
+            `SELECT fi.insumo_id, fi.cantidad, i.costo_unitario
              FROM ficha_ingredientes fi JOIN insumos i ON fi.insumo_id = i.id
              WHERE fi.catalogo_id = ?`,
             [item.referencia_id]
           );
-          costoTotal += parseFloat(costoRow?.costo || 0) * (parseFloat(item.cantidad) || 1);
+          for (const ing of ingredientes) {
+            costoTotal += parseFloat(ing.cantidad) * parseFloat(ing.costo_unitario) * cantidadItem;
+            const actual = descuentos.get(ing.insumo_id) || 0;
+            descuentos.set(ing.insumo_id, actual + parseFloat(ing.cantidad) * cantidadItem);
+          }
         } else {
-          costoTotal += parseFloat(item.precio_unitario || 0) * (parseFloat(item.cantidad) || 1);
+          // tipo 'insumo': flor/material suelto vendido directo en el pedido
+          costoTotal += parseFloat(item.precio_unitario || 0) * cantidadItem;
+          if (item.referencia_id) {
+            const actual = descuentos.get(item.referencia_id) || 0;
+            descuentos.set(item.referencia_id, actual + cantidadItem);
+          }
         }
       }
 
@@ -207,42 +219,82 @@ async function updateEstado(req, res) {
       const saldoPendiente = (parseFloat(pedido.precio) || 0) - (parseFloat(pedido.adelanto) || 0);
 
       try {
-        if (saldoPendiente > 0) {
-          await query(
-            `INSERT INTO ventas_floreria
-              (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
-             VALUES (?,?,?,?,?,?,?)`,
-            [
-              null,
-              `Saldo pedido — ${nombreVenta}`,
-              saldoPendiente,
-              costoTotal,
-              'mostrador',
-              pedido.cliente_nombre || null,
-              `Pedido #${pedido.numero}`
-            ]
+        await transaction(async (conn) => {
+          if (saldoPendiente > 0) {
+            await conn.query(
+              `INSERT INTO ventas_floreria
+                (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
+               VALUES (?,?,?,?,?,?,?)`,
+              [
+                null,
+                `Saldo pedido — ${nombreVenta}`,
+                saldoPendiente,
+                costoTotal,
+                'mostrador',
+                pedido.cliente_nombre || null,
+                `Pedido #${pedido.numero}`
+              ]
+            );
+          }
+
+          // ── Descontar del inventario los insumos usados en el pedido ──────
+          for (const [insumoId, cantidad] of descuentos) {
+            await conn.query(
+              'UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?',
+              [cantidad, insumoId]
+            );
+          }
+
+          await conn.query(
+            `UPDATE pedidos SET estado = ?, adelanto_original = COALESCE(adelanto_original, adelanto), adelanto = precio, ventas_registradas = 1 WHERE id = ?`,
+            [estado, id]
           );
-          logger.info(`Pedido #${pedido.numero} entregado — saldo ₡${saldoPendiente} registrado`);
+        });
+
+        if (saldoPendiente > 0) {
+          logger.info(`Pedido #${pedido.numero} entregado — saldo ₡${saldoPendiente} registrado, ${descuentos.size} insumo(s) descontados`);
         } else {
-          logger.info(`Pedido #${pedido.numero} entregado — totalmente pagado con adelanto, sin saldo pendiente`);
+          logger.info(`Pedido #${pedido.numero} entregado — sin saldo pendiente, ${descuentos.size} insumo(s) descontados`);
         }
       } catch (e) {
-        logger.error(`updateEstado INSERT venta ERROR: ${e.message}`);
+        logger.error(`updateEstado entregado ERROR: ${e.message}`);
+        throw e;
       }
 
-      // ── Saldo → 0 y marcar ventas como registradas (no volver a registrar) ──
-      await query(
-        `UPDATE pedidos SET estado = ?, adelanto_original = COALESCE(adelanto_original, adelanto), adelanto = precio, ventas_registradas = 1 WHERE id = ?`,
-        [estado, id]
-      );
-
     } else if (estado !== 'entregado' && pedido.estado === 'entregado') {
-      // ── Revertir saldo al adelanto original y permitir registrar la venta de nuevo
-      //    si vuelve a marcarse como entregado (ventas_registradas=0) ──────────
-      await query(
-        `UPDATE pedidos SET estado = ?, adelanto = COALESCE(adelanto_original, adelanto), adelanto_original = NULL, ventas_registradas = 0 WHERE id = ?`,
-        [estado, id]
-      );
+      // ── Revertir saldo al adelanto original, devolver al inventario lo descontado
+      //    y permitir registrar la venta de nuevo si vuelve a marcarse entregado ──
+      const items = await query('SELECT * FROM pedido_items WHERE pedido_id = ?', [id]);
+      const restituciones = new Map(); // insumo_id -> cantidad a devolver
+
+      for (const item of items) {
+        const cantidadItem = parseFloat(item.cantidad) || 1;
+        if (item.tipo === 'arreglo') {
+          const ingredientes = await query(
+            'SELECT insumo_id, cantidad FROM ficha_ingredientes WHERE catalogo_id = ?',
+            [item.referencia_id]
+          );
+          for (const ing of ingredientes) {
+            const actual = restituciones.get(ing.insumo_id) || 0;
+            restituciones.set(ing.insumo_id, actual + parseFloat(ing.cantidad) * cantidadItem);
+          }
+        } else if (item.referencia_id) {
+          const actual = restituciones.get(item.referencia_id) || 0;
+          restituciones.set(item.referencia_id, actual + cantidadItem);
+        }
+      }
+
+      await transaction(async (conn) => {
+        for (const [insumoId, cantidad] of restituciones) {
+          await conn.query('UPDATE insumos SET stock_actual = stock_actual + ? WHERE id = ?', [cantidad, insumoId]);
+        }
+        await conn.query(
+          `UPDATE pedidos SET estado = ?, adelanto = COALESCE(adelanto_original, adelanto), adelanto_original = NULL, ventas_registradas = 0 WHERE id = ?`,
+          [estado, id]
+        );
+      });
+
+      logger.info(`Pedido #${pedido.numero} salió de entregado — ${restituciones.size} insumo(s) devueltos al inventario`);
 
     } else {
       await query('UPDATE pedidos SET estado = ? WHERE id = ?', [estado, id]);
