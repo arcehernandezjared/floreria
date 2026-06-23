@@ -221,6 +221,36 @@ async function updateEstado(req, res) {
         ? items.map(i => i.nombre).filter(Boolean).join(', ') || pedido.tipo_arreglo || 'Pedido'
         : pedido.tipo_arreglo || 'Pedido';
 
+      // ── Validar TODO el stock necesario antes de escribir nada ──────────────
+      // Si falta cualquier insumo, no se registra la venta ni se descuenta nada.
+      if (descuentos.size > 0) {
+        const ids = [...descuentos.keys()];
+        const insumosActuales = await query(
+          `SELECT id, nombre, unidad, stock_actual FROM insumos WHERE id IN (${ids.map(() => '?').join(',')})`,
+          ids
+        );
+        const stockMap = new Map(insumosActuales.map(i => [i.id, i]));
+        const sinStock = [];
+        for (const [insumoId, cantidadNecesaria] of descuentos) {
+          const insumo = stockMap.get(insumoId);
+          if (!insumo || parseFloat(insumo.stock_actual) < cantidadNecesaria) {
+            sinStock.push({
+              nombre: insumo?.nombre || `insumo #${insumoId}`,
+              necesario: cantidadNecesaria,
+              disponible: insumo ? parseFloat(insumo.stock_actual) : 0,
+              unidad: insumo?.unidad || ''
+            });
+          }
+        }
+        if (sinStock.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message: `No se puede marcar como entregado — stock insuficiente para: ${sinStock.map(s => `${s.nombre} (necesita ${s.necesario}, hay ${s.disponible} ${s.unidad})`).join(', ')}`,
+            datos: sinStock
+          });
+        }
+      }
+
       // Solo registrar el saldo pendiente (precio - adelanto ya cobrado al crear el pedido)
       const saldoPendiente = (parseFloat(pedido.precio) || 0) - (parseFloat(pedido.adelanto) || 0);
 
