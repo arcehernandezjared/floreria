@@ -335,13 +335,16 @@ async function estadoNegocio({ periodo = 'hoy' }) {
   const desde = periodo === 'hoy' ? hoy : periodo === 'ayer' ? ayer : periodo === 'semana' ? semD : inicioMes;
   const hasta = periodo === 'ayer' ? ayer : null;
 
-  const fechaWhere  = hasta ? 'DATE(fecha) BETWEEN ? AND ?' : 'DATE(fecha) >= ?';
+  // ventas_floreria y mermas son DATETIME (guardadas en UTC) → necesitan CONVERT_TZ.
+  // gastos es DATE puro (sin hora) → comparación directa, sin conversión.
+  const fechaWhereTS  = hasta ? "DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) BETWEEN ? AND ?" : "DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) >= ?";
+  const fechaWhereDate = hasta ? 'DATE(fecha) BETWEEN ? AND ?' : 'DATE(fecha) >= ?';
   const fechaParams = hasta ? [desde, hasta] : [desde];
 
   const [ventas, mermas, gastos, stockBajo, pedidosPend] = await Promise.all([
-    queryOne(`SELECT COUNT(*) as total, COALESCE(SUM(precio_venta),0) as ingresos, COALESCE(SUM(costo_produccion),0) as costos FROM ventas_floreria WHERE ${fechaWhere}`, fechaParams),
-    queryOne(`SELECT COUNT(*) as total, COALESCE(SUM(costo_total),0) as perdida FROM mermas WHERE ${fechaWhere}`, fechaParams),
-    queryOne(`SELECT COALESCE(SUM(monto),0) as total FROM gastos WHERE ${fechaWhere}`, fechaParams),
+    queryOne(`SELECT COUNT(*) as total, COALESCE(SUM(precio_venta),0) as ingresos, COALESCE(SUM(costo_produccion),0) as costos FROM ventas_floreria WHERE ${fechaWhereTS}`, fechaParams),
+    queryOne(`SELECT COUNT(*) as total, COALESCE(SUM(costo_total),0) as perdida FROM mermas WHERE ${fechaWhereTS}`, fechaParams),
+    queryOne(`SELECT COALESCE(SUM(monto),0) as total FROM gastos WHERE ${fechaWhereDate}`, fechaParams),
     query('SELECT nombre, stock_actual, unidad FROM insumos WHERE activo=1 AND stock_actual <= stock_minimo AND stock_actual > 0 LIMIT 5'),
     queryOne("SELECT COUNT(*) as total FROM pedidos WHERE estado = 'pendiente'").catch(() => ({ total: 0 }))
   ]);
@@ -373,7 +376,7 @@ async function consultarVentas({ periodo = 'hoy', canal = 'todos' }) {
   const desde = periodo === 'hoy' ? hoy : periodo === 'ayer' ? ayer : periodo === 'semana' ? new Date(Date.now() - 7*86400000).toLocaleDateString('en-CA', crtz) : inicioMes;
   const hasta = periodo === 'ayer' ? ayer : null;
 
-  let where = hasta ? 'DATE(v.fecha) BETWEEN ? AND ?' : 'DATE(v.fecha) >= ?';
+  let where = hasta ? "DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) BETWEEN ? AND ?" : "DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) >= ?";
   const params = hasta ? [desde, hasta] : [desde];
   if (canal !== 'todos') { where += ' AND v.canal = ?'; params.push(canal); }
 
@@ -435,10 +438,15 @@ async function consultarGastos({ periodo = 'mes', categoria = 'todos' }) {
   else if (periodo === 'semana')  { desde = new Date(Date.now() - 7*86400000).toLocaleDateString('en-CA', crtz); }
   else if (periodo === 'mes')     { desde = inicioMes; }
   else if (periodo === 'mes_anterior') {
-    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
-    desde = d.toLocaleDateString('en-CA', crtz).substring(0, 8) + '01';
-    const fin = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    hasta = fin.toLocaleDateString('en-CA', crtz);
+    // Cálculo puro por calendario a partir de "hoy" (ya en hora CR) — evita
+    // depender de getMonth()/getDate() del servidor, que corre en UTC
+    const [yr, mo] = hoy.split('-').map(Number);
+    let yrPrev = yr, moPrev = mo - 1;
+    if (moPrev === 0) { moPrev = 12; yrPrev -= 1; }
+    const moPrevStr = String(moPrev).padStart(2, '0');
+    desde = `${yrPrev}-${moPrevStr}-01`;
+    const ultimoDia = new Date(yrPrev, moPrev, 0).getDate();
+    hasta = `${yrPrev}-${moPrevStr}-${String(ultimoDia).padStart(2, '0')}`;
   }
 
   let where = hasta ? 'fecha BETWEEN ? AND ?' : 'fecha >= ?';

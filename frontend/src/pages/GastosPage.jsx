@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Receipt, Trash2, MessageSquare, Pencil } from 'lucide-react';
-import api, { formatMoney, formatDate } from '../utils/api';
+import api, { formatMoney, formatDate, hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -37,7 +37,7 @@ const CATEGORIAS_FORM = [
 ];
 
 function GastoModal({ gasto, onClose, onSave }) {
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = hoyCR();
   const [form, setForm] = useState(() => {
     if (!gasto) return { concepto: '', monto: '', tipo: 'variable', categoria: 'otro', fecha: hoy, recurrente: false, notas: '' };
     return {
@@ -103,7 +103,7 @@ function GastoModal({ gasto, onClose, onSave }) {
 export default function GastosPage() {
   const qc = useQueryClient();
   const [modal, setModal] = useState(null);
-  const [filtroMes, setFiltroMes] = useState(new Date().toISOString().substring(0, 7));
+  const [filtroMes, setFiltroMes] = useState(hoyCR().substring(0, 7));
 
   const mesInicio = filtroMes + '-01';
   const [yy, mm] = filtroMes.split('-').map(Number);

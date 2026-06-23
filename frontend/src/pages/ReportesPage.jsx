@@ -9,7 +9,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js';
-import api, { formatMoney } from '../utils/api';
+import api, { formatMoney, hoyCR } from '../utils/api';
 import { motion } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -55,21 +55,30 @@ const chartBase = {
 };
 
 // ── Helpers de rango de fechas ────────────────────────────────────────────────
+// Todo derivado de la fecha de Costa Rica (hoyCR) — nunca de getFullYear()/
+// getMonth() del navegador combinados con toISOString() (UTC), que se
+// desincronizan entre las 6pm y medianoche hora CR.
 function calcRange(presetIdx) {
-  const hoy = new Date();
-  const fmt = d => d.toISOString().split('T')[0];
+  const [yr, mo, day] = hoyCR().split('-').map(Number);
   const p = PRESETS[presetIdx];
+  const pad = n => String(n).padStart(2, '0');
+
   if (p.type === 'month') {
-    const ref = new Date(hoy.getFullYear(), hoy.getMonth() + p.days, 1);
-    const fin = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
-    return { desde: fmt(ref), hasta: fmt(fin) };
+    const totalMeses = (yr * 12 + (mo - 1)) + p.days;
+    const refYear  = Math.floor(totalMeses / 12);
+    const refMonth = totalMeses % 12; // 0-indexado
+    const desde = `${refYear}-${pad(refMonth + 1)}-01`;
+    const ultimoDia = new Date(refYear, refMonth + 1, 0).getDate();
+    const hasta = `${refYear}-${pad(refMonth + 1)}-${pad(ultimoDia)}`;
+    return { desde, hasta };
   }
   if (p.type === 'year') {
-    return { desde: `${hoy.getFullYear()}-01-01`, hasta: fmt(hoy) };
+    return { desde: `${yr}-01-01`, hasta: hoyCR() };
   }
   if (p.type === 'days') {
-    const ini = new Date(); ini.setDate(ini.getDate() - p.days);
-    return { desde: fmt(ini), hasta: fmt(hoy) };
+    const ini = new Date(yr, mo - 1, day - p.days);
+    const iniStr = `${ini.getFullYear()}-${pad(ini.getMonth() + 1)}-${pad(ini.getDate())}`;
+    return { desde: iniStr, hasta: hoyCR() };
   }
   return null;
 }
@@ -290,7 +299,7 @@ function exportPDF(tab, data, periodo) {
     doc.text(`Página ${i} de ${pageCount}`, W - 14, 290, { align: 'right' });
   }
 
-  doc.save(`reporte_${tab}_${new Date().toISOString().split('T')[0]}.pdf`);
+  doc.save(`reporte_${tab}_${hoyCR()}.pdf`);
 }
 
 // ── Exportar Excel ────────────────────────────────────────────────────────────
@@ -394,7 +403,7 @@ function exportExcel(tab, data, periodo) {
     );
   }
 
-  XLSX.writeFile(wb, `reporte_${tab}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(wb, `reporte_${tab}_${hoyCR()}.xlsx`);
 }
 
 // ── Sub-reportes ──────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ import {
   LineElement, PointElement, ArcElement,
   Tooltip, Legend, Filler
 } from 'chart.js';
-import api, { formatMoney } from '../utils/api';
+import api, { formatMoney, hoyCR } from '../utils/api';
 import useAuthStore from '../store/authStore';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, ArcElement, Tooltip, Legend, Filler);
@@ -73,10 +73,10 @@ export default function DashboardPage() {
 
   // ── Gráfica ventas 7 días ──
   const lineChartData = useMemo(() => {
+    const [yr, mo, day] = hoyCR().split('-').map(Number);
     const last7 = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (6 - i));
-      return d.toISOString().split('T')[0];
+      const d = new Date(yr, mo - 1, day - (6 - i));
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     });
     const map = Object.fromEntries(
       (dash?.ventas_semana || []).map(v => {

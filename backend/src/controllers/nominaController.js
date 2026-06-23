@@ -212,7 +212,7 @@ async function getCalculoSalarios(req, res) {
         [desde, hasta]
       ),
       queryOne(
-        `SELECT COALESCE(SUM(costo_total),0) as total FROM mermas WHERE DATE(fecha) BETWEEN ? AND ?`,
+        `SELECT COALESCE(SUM(costo_total),0) as total FROM mermas WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) BETWEEN ? AND ?`,
         [desde, hasta]
       )
     ]);
@@ -324,9 +324,11 @@ async function registrarProvisionNomina(fecha, ingresos_dia) {
 
 async function getResumenMes(req, res) {
   try {
-    const hoy = new Date();
-    const primerDia = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`;
-    const hoyStr = hoy.toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+    // Todo derivado de la fecha de Costa Rica — nunca de getMonth()/getDate() del
+    // servidor (que corre en UTC y se desincroniza cerca de medianoche/fin de mes)
+    const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+    const [yr, mo, dia] = hoyStr.split('-').map(Number);
+    const primerDia = `${yr}-${String(mo).padStart(2, '0')}-01`;
 
     const [ventas, gastos] = await Promise.all([
       queryOne(
@@ -341,8 +343,8 @@ async function getResumenMes(req, res) {
       ),
     ]);
 
-    const diasTranscurridos = hoy.getDate();
-    const diasEnMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+    const diasTranscurridos = dia;
+    const diasEnMes = new Date(yr, mo, 0).getDate();
 
     res.json({
       success: true,

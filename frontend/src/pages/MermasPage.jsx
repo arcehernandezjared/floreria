@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2, Pencil, X, Check } from 'lucide-react';
-import api, { formatMoney, formatDate } from '../utils/api';
+import api, { formatMoney, formatDate, hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
@@ -91,7 +91,7 @@ function EditModal({ merma, proveedores, onClose, onSave }) {
 export default function MermasPage() {
   const qc = useQueryClient();
   const [form, setForm] = useState(emptyForm);
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = hoyCR();
   const [desde, setDesde] = useState(hoy);
   const [hasta, setHasta] = useState(hoy);
   const [editando, setEditando] = useState(null);
@@ -105,7 +105,7 @@ export default function MermasPage() {
   const { data: mermasMes = [] } = useQuery({
     queryKey: ['mermas-motivo'],
     queryFn: () => api.get('/mermas/por-motivo', {
-      params: { desde: new Date().toISOString().substring(0, 8) + '01' }
+      params: { desde: hoyCR().substring(0, 8) + '01' }
     }).then(r => r.data.data)
   });
 

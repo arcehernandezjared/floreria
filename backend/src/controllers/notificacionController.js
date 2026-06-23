@@ -2,9 +2,10 @@ const { queryOne } = require('../config/database');
 
 async function getNotificaciones(req, res) {
   try {
+    const crtz = { timeZone: 'America/Costa_Rica' };
     const hoy = new Date();
-    const hoyStr = hoy.toISOString().split('T')[0];
-    const hora = hoy.getHours();
+    const hoyStr = hoy.toLocaleDateString('en-CA', crtz);
+    const hora = parseInt(hoy.toLocaleTimeString('es-CR', { hour: '2-digit', hour12: false, ...crtz }));
     const alertas = [];
 
     const [cierreHoy, agotados, bajosMin, comprasPend, ventasHoy] = await Promise.all([
@@ -22,7 +23,7 @@ async function getNotificaciones(req, res) {
         "SELECT COUNT(*) as n FROM compras WHERE estado = 'pendiente'"
       ),
       queryOne(
-        'SELECT COUNT(*) as n FROM ventas_floreria WHERE DATE(fecha) = ?',
+        "SELECT COUNT(*) as n FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?",
         [hoyStr]
       )
     ]);
@@ -94,9 +95,8 @@ async function getNotificaciones(req, res) {
     try {
       const config = await queryOne('SELECT * FROM config_nomina LIMIT 1');
       if (config) {
-        const dia = hoy.getDate();
-        const y = hoy.getFullYear();
-        const m = String(hoy.getMonth() + 1).padStart(2, '0');
+        const [y, m, diaStr] = hoyStr.split('-');
+        const dia = parseInt(diaStr);
         const periodoInicio = dia <= 15 ? `${y}-${m}-01` : `${y}-${m}-16`;
         const periodoFin = new Date(periodoInicio);
         periodoFin.setDate(periodoFin.getDate() + parseInt(config.periodo_dias) - 1);

@@ -4,7 +4,7 @@ import {
   Plus, Printer, Edit, Trash2, X, Clock, Package,
   CheckCircle, XCircle, Search, ChevronDown, Flower2
 } from 'lucide-react';
-import api, { formatMoney } from '../utils/api';
+import api, { formatMoney, hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
@@ -189,7 +189,7 @@ function BuscadorDropdown({ placeholder, items, onSelect, renderItem, renderTag,
 
 // ── Formulario ────────────────────────────────────────────────────────────────
 const EMPTY_FORM = {
-  fecha: new Date().toISOString().split('T')[0],
+  fecha: hoyCR(),
   cliente_nombre: '', cliente_telefono: '', hora_entrega: '', direccion: '',
   tipo_arreglo: '', tributo_numero: '',
   adelanto: '',

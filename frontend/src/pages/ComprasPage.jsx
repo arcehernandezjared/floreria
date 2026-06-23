@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ShoppingCart, Trash2 } from 'lucide-react';
-import api, { formatMoney, formatDate } from '../utils/api';
+import api, { formatMoney, formatDate, hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function NuevaCompraModal({ onClose, onSave, proveedores, insumos, categorias }) {
-  const [form, setForm] = useState({ proveedor_id: '', fecha: new Date().toISOString().split('T')[0], notas: '' });
+  const [form, setForm] = useState({ proveedor_id: '', fecha: hoyCR(), notas: '' });
   const [items, setItems] = useState([{ insumo_id: '', cantidad: '', costo_unitario: '', _cat: '' }]);
 
   const addItem = () => setItems(p => [...p, { insumo_id: '', cantidad: '', costo_unitario: '', _cat: '' }]);

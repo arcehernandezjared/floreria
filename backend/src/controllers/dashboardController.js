@@ -19,7 +19,7 @@ async function getDashboard(req, res) {
     // 2. Mermas hoy
     const mermasHoy = await queryOne(
       `SELECT COUNT(*) as count, COALESCE(SUM(costo_total), 0) as costo_total
-       FROM mermas WHERE DATE(fecha) = ?`,
+       FROM mermas WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`,
       [hoy]
     );
 
@@ -47,9 +47,9 @@ async function getDashboard(req, res) {
     const config = await queryOne('SELECT * FROM config_nomina LIMIT 1');
     let termometro = { meta: 0, acumulado_periodo: 0, porcentaje_avance: 0, estado: 'rojo' };
     if (config) {
-      const dia = new Date().getDate();
-      const year = new Date().getFullYear();
-      const month = String(new Date().getMonth() + 1).padStart(2, '0');
+      const hoyCR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+      const [year, month, diaStr] = hoyCR.split('-');
+      const dia = parseInt(diaStr);
       const periodoInicio = dia <= 15 ? `${year}-${month}-01` : `${year}-${month}-16`;
 
       const nomResult = await queryOne(
@@ -110,7 +110,8 @@ async function getDashboard(req, res) {
     );
 
     const mermasMes = await queryOne(
-      'SELECT COALESCE(SUM(costo_total), 0) as total FROM mermas WHERE fecha BETWEEN ? AND ?',
+      `SELECT COALESCE(SUM(costo_total), 0) as total FROM mermas
+       WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) BETWEEN ? AND ?`,
       [mesInicio, hoy]
     );
 

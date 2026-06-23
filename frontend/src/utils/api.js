@@ -30,8 +30,13 @@ export const formatMoney = (amount, symbol = '₡') => {
 
 export const formatDate = (date) => {
   if (!date) return '';
-  return new Date(date).toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(date).toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Costa_Rica' });
 };
+
+// Fecha de "hoy" en zona horaria de Costa Rica, formato YYYY-MM-DD.
+// NUNCA usar new Date().toISOString() para esto — toISOString() es siempre UTC
+// y después de las 6pm hora CR ya muestra el día siguiente.
+export const hoyCR = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
 
 export const calcularMargen = (precio, costo) => {
   if (!precio || precio === 0) return 0;

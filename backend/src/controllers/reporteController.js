@@ -2,7 +2,7 @@ const { query, queryOne } = require('../config/database');
 const logger = require('../utils/logger');
 
 function rango(desde, hasta) {
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
   const mesInicio = hoy.substring(0, 8) + '01';
   return { desde: desde || mesInicio, hasta: hasta || hoy };
 }
@@ -104,13 +104,13 @@ async function getMermas(req, res) {
                 COALESCE(SUM(costo_total),0) as perdida_total,
                 COALESCE(AVG(costo_total),0) as perdida_promedio,
                 COALESCE(SUM(cantidad),0) as total_unidades
-         FROM mermas WHERE DATE(fecha) BETWEEN ? AND ?`,
+         FROM mermas WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) BETWEEN ? AND ?`,
         [desde, hasta]
       ),
       query(
         `SELECT motivo, COUNT(*) as cantidad,
                 COALESCE(SUM(costo_total),0) as total
-         FROM mermas WHERE DATE(fecha) BETWEEN ? AND ?
+         FROM mermas WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) BETWEEN ? AND ?
          GROUP BY motivo ORDER BY total DESC`,
         [desde, hasta]
       ),
@@ -118,14 +118,14 @@ async function getMermas(req, res) {
         `SELECT i.nombre, COUNT(m.id) as registros,
                 SUM(m.cantidad) as unidades, SUM(m.costo_total) as perdida
          FROM mermas m JOIN insumos i ON m.insumo_id = i.id
-         WHERE DATE(m.fecha) BETWEEN ? AND ?
+         WHERE DATE(CONVERT_TZ(m.fecha, '+00:00', '-06:00')) BETWEEN ? AND ?
          GROUP BY m.insumo_id, i.nombre ORDER BY perdida DESC LIMIT 10`,
         [desde, hasta]
       ),
       query(
         `SELECT i.nombre as insumo, m.cantidad, m.costo_total, m.motivo, m.notas, m.fecha
          FROM mermas m JOIN insumos i ON m.insumo_id = i.id
-         WHERE DATE(m.fecha) BETWEEN ? AND ?
+         WHERE DATE(CONVERT_TZ(m.fecha, '+00:00', '-06:00')) BETWEEN ? AND ?
          ORDER BY m.fecha DESC LIMIT 150`,
         [desde, hasta]
       )
@@ -151,7 +151,7 @@ async function getFinanciero(req, res) {
       ),
       queryOne(
         `SELECT COALESCE(SUM(costo_total),0) as perdida
-         FROM mermas WHERE DATE(fecha) BETWEEN ? AND ?`,
+         FROM mermas WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) BETWEEN ? AND ?`,
         [desde, hasta]
       ),
       query(

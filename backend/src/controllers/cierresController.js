@@ -75,7 +75,7 @@ async function getSummary(req, res) {
         `SELECT COALESCE(SUM(monto), 0) as total FROM gastos WHERE DATE(fecha) = ?`, [fecha]
       ),
       queryOne(
-        `SELECT COALESCE(SUM(costo_total), 0) as total FROM mermas WHERE DATE(fecha) = ?`, [fecha]
+        `SELECT COALESCE(SUM(costo_total), 0) as total FROM mermas WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`, [fecha]
       )
     ]);
 
@@ -122,7 +122,7 @@ async function createCierre(req, res) {
     const [ventas, gastos, mermas] = await Promise.all([
       queryOne(`SELECT COUNT(*) as count, COALESCE(SUM(precio_venta),0) as total FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`, [fecha]),
       queryOne(`SELECT COALESCE(SUM(monto),0) as total FROM gastos WHERE DATE(fecha) = ?`, [fecha]),
-      queryOne(`SELECT COALESCE(SUM(costo_total),0) as total FROM mermas WHERE DATE(fecha) = ?`, [fecha]),
+      queryOne(`SELECT COALESCE(SUM(costo_total),0) as total FROM mermas WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`, [fecha]),
     ]);
 
     // ── Registrar provisión de nómina ──

@@ -6,7 +6,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ── Número correlativo ────────────────────────────────────────────────────────
 async function generarNumero() {
-  const year = new Date().getFullYear();
+  const year = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }).split('-')[0];
   const last = await queryOne(
     "SELECT numero FROM cotizaciones WHERE numero LIKE ? ORDER BY id DESC LIMIT 1",
     [`COT-${year}-%`]

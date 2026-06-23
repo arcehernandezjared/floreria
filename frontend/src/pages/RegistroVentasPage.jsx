@@ -6,7 +6,7 @@ import {
   Flower2, Package, MapPin, Calendar
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import api from '../utils/api';
+import api, { hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
 
 const CANAL_LABELS = {
@@ -16,11 +16,8 @@ const CANAL_LABELS = {
   pedido:    { label: 'Pedidos',   icon: Package,       color: 'text-amber-400 bg-amber-500/10' },
 };
 
-function hoy()      { return new Date().toISOString().split('T')[0]; }
-function inicioMes() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
+function hoy()      { return hoyCR(); }
+function inicioMes() { return hoyCR().substring(0, 8) + '01'; }
 
 function fmtCRC(n) {
   // ₡ no está en las fuentes estándar de jsPDF → usar "CRC"

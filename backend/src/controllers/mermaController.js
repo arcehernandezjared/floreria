@@ -12,8 +12,8 @@ async function getMermas(req, res) {
       WHERE 1=1
     `;
     const params = [];
-    if (desde) { sql += ' AND DATE(m.fecha) >= ?'; params.push(desde); }
-    if (hasta) { sql += ' AND DATE(m.fecha) <= ?'; params.push(hasta); }
+    if (desde) { sql += " AND DATE(CONVERT_TZ(m.fecha, '+00:00', '-06:00')) >= ?"; params.push(desde); }
+    if (hasta) { sql += " AND DATE(CONVERT_TZ(m.fecha, '+00:00', '-06:00')) <= ?"; params.push(hasta); }
     if (motivo) { sql += ' AND m.motivo = ?'; params.push(motivo); }
     if (insumo_id) { sql += ' AND m.insumo_id = ?'; params.push(insumo_id); }
     if (proveedor_id) { sql += ' AND m.proveedor_id = ?'; params.push(proveedor_id); }
@@ -145,8 +145,8 @@ async function getMermasPorMotivo(req, res) {
       WHERE 1=1
     `;
     const params = [];
-    if (desde) { sql += ' AND DATE(fecha) >= ?'; params.push(desde); }
-    if (hasta) { sql += ' AND DATE(fecha) <= ?'; params.push(hasta); }
+    if (desde) { sql += " AND DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) >= ?"; params.push(desde); }
+    if (hasta) { sql += " AND DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) <= ?"; params.push(hasta); }
     sql += ' GROUP BY motivo ORDER BY total_perdido DESC';
 
     const data = await query(sql, params);
