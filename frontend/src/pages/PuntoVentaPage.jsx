@@ -461,39 +461,29 @@ export default function PuntoVentaPage() {
     mutationFn: async () => {
       const catalogoItems = carrito.filter(i => i.tipo === 'catalogo');
       const insumoItems   = carrito.filter(i => i.tipo === 'insumo');
-      const promises = [];
-      if (catalogoItems.length > 0) {
-        promises.push(api.post('/catalogo/venta-lote', {
-          items: catalogoItems.map(i => ({
-            catalogo_id: i.id,
-            cantidad: i.cantidad,
-            precio_venta: i.precio_venta,
-            notas: ''
-          })),
-          nombre_cliente: cliente || 'Cliente mostrador',
-          canal,
-          descuento,
-        }));
-      }
-      if (insumoItems.length > 0) {
-        promises.push(api.post('/insumos/venta-directa', {
-          items: insumoItems.map(i => ({ insumo_id: i.id, cantidad: Math.round(i.cantidad * 10000) / 10000, precio_unitario: i.precio_unitario })),
-          nombre_cliente: cliente || 'Cliente mostrador',
-          canal,
-          descuento,
-        }));
-      }
-      if (manoDeObra > 0) {
-        const fechaCR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
-        promises.push(api.post('/ventas/manual', {
-          concepto: 'Mano de obra',
-          monto: manoDeObra,
-          fecha: fechaCR,
-          canal,
-          nombre_cliente: cliente || 'Cliente mostrador',
-        }));
-      }
-      return Promise.all(promises);
+      const fechaCR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+
+      // Todo el carrito en UNA sola petición — el backend lo registra en una
+      // sola transacción (todo o nada). Evita que si una parte falla por stock
+      // insuficiente, las partes que ya tuvieron éxito queden duplicadas al reintentar.
+      return api.post('/catalogo/venta-pos', {
+        catalogo_items: catalogoItems.map(i => ({
+          catalogo_id: i.id,
+          cantidad: i.cantidad,
+          precio_venta: i.precio_venta,
+          notas: ''
+        })),
+        insumo_items: insumoItems.map(i => ({
+          insumo_id: i.id,
+          cantidad: Math.round(i.cantidad * 10000) / 10000,
+          precio_unitario: i.precio_unitario
+        })),
+        mano_de_obra: manoDeObra,
+        nombre_cliente: cliente || 'Cliente mostrador',
+        canal,
+        descuento,
+        fecha: fechaCR,
+      });
     },
     onSuccess: () => {
       const snap = {

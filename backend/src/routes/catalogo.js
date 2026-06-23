@@ -21,6 +21,7 @@ router.delete('/ventas/:id', ctrl.revertirVenta);
 router.post('/recalcular-costos', ctrl.recalcularCostos);
 router.post('/venta', ctrl.registrarVenta);
 router.post('/venta-lote', ctrl.registrarVentaLote);
+router.post('/venta-pos', ctrl.registrarVentaPOS);
 router.post('/upload-imagen', upload.single('imagen'), ctrl.uploadImagen);
 router.post('/venta-personalizada', ctrl.ventaPersonalizada);
 router.post('/importar-php', ctrl.importarDesdePhp);

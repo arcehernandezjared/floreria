@@ -389,6 +389,154 @@ async function registrarVentaLote(req, res) {
   }
 }
 
+function fmtCantidadPOS(n) {
+  const v = parseFloat(n);
+  if (Math.abs(v - 1) < 0.01) return '1';
+  if (Math.abs(v - 0.5) < 0.01) return '\xBD';
+  if (Math.abs(v - 1 / 3) < 0.02) return '⅓';
+  return parseFloat(v.toFixed(2)).toString();
+}
+
+// Registra TODO el carrito del POS (arreglos + insumos sueltos + mano de obra)
+// en una sola transacción — todo se guarda o nada se guarda. Evita que una
+// venta parcialmente fallida (por stock insuficiente en una parte del carrito)
+// deje componentes ya registrados que se duplican al reintentar.
+async function registrarVentaPOS(req, res) {
+  try {
+    const {
+      catalogo_items = [], insumo_items = [], mano_de_obra = 0,
+      nombre_cliente, canal, descuento, fecha
+    } = req.body;
+
+    if (catalogo_items.length === 0 && insumo_items.length === 0 && parseFloat(mano_de_obra) <= 0) {
+      return res.status(400).json({ success: false, message: 'El carrito está vacío' });
+    }
+
+    const descPct = parseFloat(descuento) || 0;
+
+    // ── Validar TODO el carrito antes de escribir nada ───────────────────────
+    const stockNecesario = {};
+    const arreglosMap = {};
+    for (const item of catalogo_items) {
+      const arreglo = await queryOne('SELECT * FROM catalogo WHERE id = ? AND activo = 1', [item.catalogo_id]);
+      if (!arreglo) return res.status(404).json({ success: false, message: `Arreglo ${item.catalogo_id} no encontrado` });
+      arreglosMap[item.catalogo_id] = arreglo;
+
+      const ings = await query(
+        `SELECT fi.insumo_id, fi.cantidad, i.stock_actual, i.nombre as insumo_nombre
+         FROM ficha_ingredientes fi JOIN insumos i ON fi.insumo_id = i.id
+         WHERE fi.catalogo_id = ?`,
+        [item.catalogo_id]
+      );
+      for (const ing of ings) {
+        const key = ing.insumo_id;
+        stockNecesario[key] = stockNecesario[key] || { nombre: ing.insumo_nombre, stock: parseFloat(ing.stock_actual), necesario: 0 };
+        stockNecesario[key].necesario += parseFloat(ing.cantidad) * (parseInt(item.cantidad) || 1);
+      }
+    }
+
+    const insumosMap = {};
+    for (const item of insumo_items) {
+      const insumo = await queryOne('SELECT * FROM insumos WHERE id = ? AND activo = 1', [item.insumo_id]);
+      if (!insumo) return res.status(404).json({ success: false, message: `Insumo ${item.insumo_id} no encontrado` });
+      insumosMap[item.insumo_id] = insumo;
+
+      const key = item.insumo_id;
+      stockNecesario[key] = stockNecesario[key] || { nombre: insumo.nombre, stock: parseFloat(insumo.stock_actual), necesario: 0 };
+      stockNecesario[key].necesario += parseFloat(item.cantidad);
+    }
+
+    const sinStock = Object.values(stockNecesario).filter(s => s.stock < s.necesario);
+    if (sinStock.length > 0) {
+      return res.status(400).json({ success: false, message: `Stock insuficiente para: ${sinStock.map(s => s.nombre).join(', ')}` });
+    }
+
+    const fechaUTC = fecha ? `${fecha} 12:00:00` : null;
+
+    // ── Todo o nada: una sola transacción para el carrito completo ───────────
+    await transaction(async (conn) => {
+      // Arreglos del catálogo
+      for (const item of catalogo_items) {
+        const arreglo = arreglosMap[item.catalogo_id];
+        const cant = parseInt(item.cantidad) || 1;
+        const costo = await calcularCostoArreglo(item.catalogo_id, conn);
+        const precioFinal = parseFloat(item.precio_venta || arreglo.precio_venta) * (1 - descPct / 100);
+
+        for (let n = 0; n < cant; n++) {
+          await conn.query(
+            `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, notas)
+             VALUES (?,?,?,?,?,?,?)`,
+            [arreglo.id, arreglo.nombre, canal || 'mostrador', precioFinal, costo, nombre_cliente || null, item.notas || null]
+          );
+        }
+
+        const ings = await conn.query(
+          `SELECT fi.insumo_id, fi.cantidad FROM ficha_ingredientes fi WHERE fi.catalogo_id = ?`,
+          [item.catalogo_id]
+        ).then(([rows]) => rows);
+
+        for (const ing of ings) {
+          const totalDescontar = parseFloat(ing.cantidad) * cant;
+          await conn.query(
+            'UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?',
+            [totalDescontar, ing.insumo_id]
+          );
+          const updated = await conn.query('SELECT stock_actual FROM insumos WHERE id = ?', [ing.insumo_id]).then(([r]) => r[0]);
+          if (parseFloat(updated.stock_actual) <= 0) {
+            await conn.query(
+              `UPDATE catalogo SET disponible_externo = 0 WHERE id IN (SELECT DISTINCT catalogo_id FROM ficha_ingredientes WHERE insumo_id = ?)`,
+              [ing.insumo_id]
+            );
+          }
+        }
+      }
+
+      // Insumos sueltos
+      for (const item of insumo_items) {
+        const insumo = insumosMap[item.insumo_id];
+        const cantidad = parseFloat(item.cantidad);
+
+        await conn.query(
+          'UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?',
+          [cantidad, item.insumo_id]
+        );
+
+        const precioConDesc = parseFloat(item.precio_unitario) * (1 - descPct / 100);
+        const precioTotal = precioConDesc * cantidad;
+        const costoTotal = parseFloat(insumo.costo_unitario) * cantidad;
+
+        await conn.query(
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, insumo_id, cantidad_insumo)
+           VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            `${insumo.nombre} \xD7${fmtCantidadPOS(cantidad)} ${insumo.unidad}`,
+            canal || 'mostrador', precioTotal, costoTotal,
+            nombre_cliente || 'Cliente mostrador', item.insumo_id, cantidad
+          ]
+        );
+      }
+
+      // Mano de obra
+      const manoNum = parseFloat(mano_de_obra) || 0;
+      if (manoNum > 0) {
+        await conn.query(
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente${fechaUTC ? ', fecha' : ''})
+           VALUES (NULL, 'Mano de obra', ?, ?, 0, ?${fechaUTC ? ', ?' : ''})`,
+          fechaUTC
+            ? [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador', fechaUTC]
+            : [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador']
+        );
+      }
+    });
+
+    logger.info(`registrarVentaPOS: ${catalogo_items.length} arreglo(s), ${insumo_items.length} insumo(s), mano de obra ₡${mano_de_obra || 0} — cliente: ${nombre_cliente || 'mostrador'}`);
+    res.status(201).json({ success: true, message: 'Venta registrada correctamente' });
+  } catch (error) {
+    logger.error(`registrarVentaPOS: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 async function getVentas(req, res) {
   try {
     const { desde, hasta, canal } = req.query;
@@ -588,4 +736,4 @@ async function importarDesdePhp(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, ensureCanalPedido, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
+module.exports = { ensureCodigo, ensureCanalPedido, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
