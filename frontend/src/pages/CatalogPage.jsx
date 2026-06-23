@@ -16,20 +16,49 @@ const getImgUrl = (url) => {
   return `${BACKEND_BASE}${url}`;
 };
 
+const FRACCIONES = [
+  { label: '1', val: 1 },
+  { label: '½', val: 0.5 },
+  { label: '⅓', val: 1 / 3 },
+];
+
+function fmtFraccion(v) {
+  if (Math.abs(v - 1 / 3) < 0.005) return '⅓';
+  if (Math.abs(v - 0.5) < 0.005) return '½';
+  if (Math.abs(v - Math.round(v)) < 0.005) return String(Math.round(v));
+  return v.toFixed(2);
+}
+
 function CantidadInput({ value, onChange }) {
   return (
-    <div className="flex items-center gap-1.5 justify-center">
-      <button type="button"
-        onClick={() => { if (value > 1) onChange(value - 1); }}
-        className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white font-bold text-base leading-none select-none">
-        −
-      </button>
-      <span className="text-white font-bold text-sm w-8 text-center tabular-nums">{value}</span>
-      <button type="button"
-        onClick={() => onChange(value + 1)}
-        className="w-7 h-7 rounded-lg bg-brand-600 hover:bg-brand-500 flex items-center justify-center text-white font-bold text-base leading-none select-none">
-        +
-      </button>
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="flex items-center gap-1.5 justify-center">
+        <button type="button"
+          onClick={() => { if (value > 0) onChange(Math.max(0, value - 1)); }}
+          className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white font-bold text-base leading-none select-none">
+          −
+        </button>
+        <span className="text-white font-bold text-sm w-8 text-center tabular-nums">{fmtFraccion(value)}</span>
+        <button type="button"
+          onClick={() => onChange(value + 1)}
+          className="w-7 h-7 rounded-lg bg-brand-600 hover:bg-brand-500 flex items-center justify-center text-white font-bold text-base leading-none select-none">
+          +
+        </button>
+      </div>
+      <div className="flex gap-1">
+        {FRACCIONES.map(f => (
+          <button key={f.label} type="button"
+            onClick={() => onChange(f.val)}
+            title={f.label === '1' ? 'Entero' : `Vender ${f.label}`}
+            className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold transition-colors select-none ${
+              Math.abs(value - f.val) < 0.005
+                ? 'bg-brand-600 text-white'
+                : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+            }`}>
+            {f.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -132,14 +161,14 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
     for (const i of raw) {
       const existing = map.get(i.insumo_id);
       if (existing) {
-        existing.cantidad += Math.round(parseFloat(i.cantidad));
+        existing.cantidad += parseFloat(i.cantidad);
       } else {
         map.set(i.insumo_id, {
           insumo_id:      i.insumo_id,
           nombre:         i.insumo_nombre,
           unidad:         i.unidad,
           costo_unitario: parseFloat(i.costo_unitario),
-          cantidad:       Math.round(parseFloat(i.cantidad)),
+          cantidad:       parseFloat(i.cantidad),
         });
       }
     }
@@ -213,7 +242,7 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
   };
 
   const cambiarCantidad = (insumo_id, valor) => {
-    const v = Math.max(0, Math.round(Number(valor)));
+    const v = Math.max(0, Number(valor));
     if (v === 0) {
       setIngredientes(prev => prev.filter(i => i.insumo_id !== insumo_id));
     } else {
