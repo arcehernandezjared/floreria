@@ -422,7 +422,6 @@ export default function PuntoVentaPage() {
   const [ventaSnapshot, setVentaSnapshot] = useState(null);
   const [modalRecibo, setModalRecibo]     = useState(false);
   const [enviandoEmail, setEnviandoEmail] = useState(false);
-  const [pagoCliente, setPagoCliente]     = useState('');
   const [modalPersonalizado, setModalPersonalizado] = useState(false);
   const qc = useQueryClient();
 
@@ -649,8 +648,6 @@ export default function PuntoVentaPage() {
     }
   };
 
-  const pagoNum  = parseFloat(pagoCliente) || 0;
-  const vuelto   = pagoNum > 0 ? pagoNum - total : null;
 
   return (
     <div className="flex flex-row gap-2 lg:gap-6" style={{ height: 'calc(100dvh - 5rem)', maxHeight: 'calc(100dvh - 5rem)' }}>
@@ -1010,37 +1007,9 @@ export default function PuntoVentaPage() {
                 </div>
               </div>
 
-              {/* ── Pago y vuelto ── */}
-              <div className="px-3 pt-2 pb-1">
-                <p className="text-xs text-gray-500 mb-1.5 font-medium">Pago del cliente</p>
-                <input
-                  type="number" min="0" step="500"
-                  className="input w-full text-base font-bold py-2.5 text-center tabular-nums"
-                  placeholder="₡ 0"
-                  value={pagoCliente}
-                  onChange={e => setPagoCliente(e.target.value)}
-                />
-              </div>
-
-              {vuelto !== null && (
-                <div className={`mx-3 mb-1 flex items-center justify-between rounded-xl px-4 py-3 ${
-                  vuelto >= 0
-                    ? 'bg-emerald-500/15 border border-emerald-500/25'
-                    : 'bg-red-500/15 border border-red-500/25'
-                }`}>
-                  <span className={`text-sm font-bold ${vuelto >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
-                    {vuelto >= 0 ? 'Vuelto' : 'Falta'}
-                  </span>
-                  <span className={`text-2xl font-extrabold tabular-nums ${vuelto >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatMoney(Math.abs(vuelto))}
-                  </span>
-                </div>
-              )}
-
               <div className="p-3">
                 <button
                   onClick={() => setModalConfirm(true)}
-                  disabled={pagoNum > 0 && vuelto < 0}
                   className="btn-primary w-full text-sm py-3 disabled:opacity-40 disabled:cursor-not-allowed">
                   <CheckCircle size={16} /> Confirmar Venta
                 </button>
