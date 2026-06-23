@@ -405,7 +405,7 @@ async function registrarVentaPOS(req, res) {
   try {
     const {
       catalogo_items = [], insumo_items = [], mano_de_obra = 0,
-      nombre_cliente, canal, descuento, fecha
+      nombre_cliente, canal, descuento
     } = req.body;
 
     if (catalogo_items.length === 0 && insumo_items.length === 0 && parseFloat(mano_de_obra) <= 0) {
@@ -450,8 +450,6 @@ async function registrarVentaPOS(req, res) {
     if (sinStock.length > 0) {
       return res.status(400).json({ success: false, message: `Stock insuficiente para: ${sinStock.map(s => s.nombre).join(', ')}` });
     }
-
-    const fechaUTC = fecha ? `${fecha} 12:00:00` : null;
 
     // ── Todo o nada: una sola transacción para el carrito completo ───────────
     await transaction(async (conn) => {
@@ -516,15 +514,14 @@ async function registrarVentaPOS(req, res) {
         );
       }
 
-      // Mano de obra
+      // Mano de obra — sin fecha explícita: usa CURRENT_TIMESTAMP (hora real de
+      // la venta), igual que los arreglos e insumos de este mismo carrito.
       const manoNum = parseFloat(mano_de_obra) || 0;
       if (manoNum > 0) {
         await conn.query(
-          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente${fechaUTC ? ', fecha' : ''})
-           VALUES (NULL, 'Mano de obra', ?, ?, 0, ?${fechaUTC ? ', ?' : ''})`,
-          fechaUTC
-            ? [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador', fechaUTC]
-            : [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador']
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente)
+           VALUES (NULL, 'Mano de obra', ?, ?, 0, ?)`,
+          [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador']
         );
       }
     });
