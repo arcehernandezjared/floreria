@@ -232,4 +232,38 @@ async function getCierres(req, res) {
   }
 }
 
-module.exports = { ensureTable, checkPendiente, getSummary, createCierre, getCierres };
+// ── Corregir un cierre ya guardado (monto inicial y/o efectivo contado) ────
+// Recalcula efectivo_esperado y diferencia_caja con los valores corregidos.
+async function corregirCierre(req, res) {
+  try {
+    const { fecha } = req.params;
+    const { monto_inicial, efectivo_caja } = req.body;
+
+    const cierre = await queryOne('SELECT * FROM cierres_dia WHERE fecha = ?', [fecha]);
+    if (!cierre) return res.status(404).json({ success: false, message: 'No hay cierre registrado esa fecha' });
+
+    const nuevoMontoInicial = monto_inicial != null ? parseFloat(monto_inicial) : parseFloat(cierre.monto_inicial) || 0;
+    const nuevoEfectivoCaja = efectivo_caja != null ? parseFloat(efectivo_caja) : parseFloat(cierre.efectivo_caja) || 0;
+    const efectivoEsperado = nuevoMontoInicial + parseFloat(cierre.ventas_efectivo || 0);
+    const diferencia = nuevoEfectivoCaja - efectivoEsperado;
+
+    await query(
+      `UPDATE cierres_dia SET monto_inicial = ?, efectivo_caja = ?, efectivo_esperado = ?, diferencia_caja = ? WHERE fecha = ?`,
+      [nuevoMontoInicial, nuevoEfectivoCaja, efectivoEsperado, diferencia, fecha]
+    );
+
+    // Mantener caja_sesiones.monto_inicial sincronizado si esa fecha tiene sesión registrada
+    if (monto_inicial != null) {
+      await query('UPDATE caja_sesiones SET monto_inicial = ? WHERE fecha = ?', [nuevoMontoInicial, fecha]);
+    }
+
+    const actualizado = await queryOne('SELECT * FROM cierres_dia WHERE fecha = ?', [fecha]);
+    logger.info(`Cierre ${fecha} corregido — monto_inicial=${nuevoMontoInicial}, efectivo_caja=${nuevoEfectivoCaja}, diferencia=${diferencia} (por ${req.user?.nombre || '—'})`);
+    res.json({ success: true, data: actualizado, message: 'Cierre corregido correctamente' });
+  } catch (e) {
+    logger.error(`corregirCierre: ${e.message}`);
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+module.exports = { ensureTable, checkPendiente, getSummary, createCierre, getCierres, corregirCierre };

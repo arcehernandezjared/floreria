@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Wallet, Banknote, CreditCard, Smartphone, CheckCircle, ChevronDown, ChevronUp, X, Lock, Pencil, Check } from 'lucide-react';
 import api, { formatMoney, hoyCR } from '../utils/api';
@@ -61,8 +61,48 @@ function EditarMontoInicial({ fecha, montoActual, onGuardado }) {
   );
 }
 
+function EditarCierre({ fecha, montoInicial, efectivoCaja, onCancelar, onGuardado }) {
+  const qc = useQueryClient();
+  const [vMonto, setVMonto] = useState(montoInicial);
+  const [vEfectivo, setVEfectivo] = useState(efectivoCaja);
+
+  const mut = useMutation({
+    mutationFn: () => api.put(`/cierres/${fecha}`, { monto_inicial: parseFloat(vMonto) || 0, efectivo_caja: parseFloat(vEfectivo) || 0 }),
+    onSuccess: () => {
+      qc.invalidateQueries(['cierres']);
+      qc.invalidateQueries(['caja-actual']);
+      toast.success('Cierre corregido');
+      onGuardado?.();
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al corregir'),
+  });
+
+  return (
+    <div className="bg-gray-900/50 rounded-lg p-3 space-y-2">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Monto inicial</label>
+          <input type="number" min="0" step="500" autoFocus className="input text-sm py-1.5"
+            value={vMonto} onChange={e => setVMonto(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 block mb-1">Efectivo contado</label>
+          <input type="number" min="0" step="500" className="input text-sm py-1.5"
+            value={vEfectivo} onChange={e => setVEfectivo(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={() => mut.mutate()} disabled={mut.isPending}
+          className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1"><Check size={12} /> Guardar</button>
+        <button onClick={onCancelar} className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1"><X size={12} /> Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
 function FilaCierre({ c }) {
   const [open, setOpen] = useState(false);
+  const [editandoCierre, setEditandoCierre] = useState(false);
   const fechaStr = normFecha(c.fecha);
   const fecha = new Date(fechaStr + 'T12:00:00').toLocaleDateString('es-CR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const diferencia = parseFloat(c.diferencia_caja || 0);
@@ -109,16 +149,29 @@ function FilaCierre({ c }) {
                   <p className="text-sm font-bold text-purple-400">{formatMoney(c.ventas_sinpe)}</p>
                 </div>
                 <div className="bg-gray-900/50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Esperado / Contado</p>
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <p className="text-xs text-gray-500">Esperado / Contado</p>
+                    {!editandoCierre && (
+                      <button onClick={() => setEditandoCierre(true)} className="text-gray-500 hover:text-brand-400" title="Corregir">
+                        <Pencil size={11} />
+                      </button>
+                    )}
+                  </div>
                   <p className="text-sm font-bold text-white">{formatMoney(c.efectivo_esperado)} / {formatMoney(c.efectivo_caja)}</p>
                 </div>
               </div>
+              {editandoCierre && (
+                <EditarCierre
+                  fecha={fechaStr}
+                  montoInicial={parseFloat(c.monto_inicial) || 0}
+                  efectivoCaja={parseFloat(c.efectivo_caja) || 0}
+                  onCancelar={() => setEditandoCierre(false)}
+                  onGuardado={() => setEditandoCierre(false)}
+                />
+              )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="bg-gray-900/50 rounded-lg p-3">
-                  <div className="flex items-center justify-between gap-2 mb-0.5">
-                    <p className="text-xs text-gray-500">Monto inicial</p>
-                    <EditarMontoInicial fecha={fechaStr} montoActual={parseFloat(c.monto_inicial) || 0} />
-                  </div>
+                  <p className="text-xs text-gray-500">Monto inicial</p>
                   <p className="text-sm font-semibold text-gray-300">{formatMoney(c.monto_inicial)}</p>
                 </div>
                 <div className="bg-gray-900/50 rounded-lg p-3">
@@ -206,7 +259,16 @@ export default function CajaPage() {
     onError: (e) => toast.error(e.response?.data?.message || 'Error al cerrar caja'),
   });
 
-  const cierreHoyExiste = cierres.some(c => normFecha(c.fecha) === crHoy);
+  const cierreHoy = cierres.find(c => normFecha(c.fecha) === crHoy);
+  const cierreHoyExiste = !!cierreHoy;
+
+  // Si ya existe un cierre de hoy (se está reabriendo para actualizar), precargar
+  // el efectivo contado anterior para no sobreescribirlo accidentalmente con 0.
+  useEffect(() => {
+    if (cierreHoy && efectivoContado === '') {
+      setEfectivoContado(String(parseFloat(cierreHoy.efectivo_caja) || ''));
+    }
+  }, [cierreHoy?.efectivo_caja]);
 
   const getMesKey = (f) => {
     if (!f) return '';
