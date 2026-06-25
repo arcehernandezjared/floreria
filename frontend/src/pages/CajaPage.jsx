@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Wallet, Banknote, CreditCard, Smartphone, CheckCircle, ChevronDown, ChevronUp, X, Lock } from 'lucide-react';
+import { Wallet, Banknote, CreditCard, Smartphone, CheckCircle, ChevronDown, ChevronUp, X, Lock, Pencil, Check } from 'lucide-react';
 import api, { formatMoney, hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +22,44 @@ const normFecha = (f) => {
   const s = String(f);
   return s.includes('T') ? s.split('T')[0] : s.substring(0, 10);
 };
+
+function EditarMontoInicial({ fecha, montoActual, onGuardado }) {
+  const qc = useQueryClient();
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState(montoActual);
+
+  const mut = useMutation({
+    mutationFn: (monto_inicial) => api.put(`/caja/${fecha}/monto-inicial`, { monto_inicial }),
+    onSuccess: () => {
+      qc.invalidateQueries(['cierres']);
+      qc.invalidateQueries(['caja-actual']);
+      toast.success('Monto inicial actualizado');
+      setEditando(false);
+      onGuardado?.();
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al actualizar'),
+  });
+
+  if (!editando) {
+    return (
+      <button onClick={() => { setValor(montoActual); setEditando(true); }}
+        className="text-gray-500 hover:text-brand-400 transition-colors" title="Editar monto inicial">
+        <Pencil size={12} />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <input type="number" min="0" step="500" autoFocus
+        className="input text-xs py-1 px-2 w-24"
+        value={valor} onChange={e => setValor(e.target.value)} />
+      <button onClick={() => mut.mutate(parseFloat(valor) || 0)} disabled={mut.isPending}
+        className="text-emerald-400 hover:text-emerald-300"><Check size={14} /></button>
+      <button onClick={() => setEditando(false)} className="text-gray-500 hover:text-gray-300"><X size={14} /></button>
+    </div>
+  );
+}
 
 function FilaCierre({ c }) {
   const [open, setOpen] = useState(false);
@@ -77,7 +115,10 @@ function FilaCierre({ c }) {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="bg-gray-900/50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">Monto inicial</p>
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <p className="text-xs text-gray-500">Monto inicial</p>
+                    <EditarMontoInicial fecha={fechaStr} montoActual={parseFloat(c.monto_inicial) || 0} />
+                  </div>
                   <p className="text-sm font-semibold text-gray-300">{formatMoney(c.monto_inicial)}</p>
                 </div>
                 <div className="bg-gray-900/50 rounded-lg p-3">
@@ -235,9 +276,10 @@ export default function CajaPage() {
             </div>
             <div>
               <h2 className="text-base font-bold text-white">Caja cerrada hoy</h2>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 flex items-center gap-1.5">
                 Monto inicial {formatMoney(cajaActual.monto_inicial)} · cerrada a las{' '}
                 {cajaActual.cerrada_en ? new Date(cajaActual.cerrada_en).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Costa_Rica' }) : '—'}
+                <EditarMontoInicial fecha={crHoy} montoActual={parseFloat(cajaActual.monto_inicial) || 0} />
               </p>
             </div>
           </div>
@@ -262,8 +304,9 @@ export default function CajaPage() {
               <CheckCircle size={20} className="text-emerald-400" />
               <div>
                 <h2 className="text-base font-bold text-white">Caja abierta hoy</h2>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 flex items-center gap-1.5">
                   Monto inicial {formatMoney(cajaActual.monto_inicial)} · por {cajaActual.usuario_nombre || '—'}
+                  <EditarMontoInicial fecha={crHoy} montoActual={parseFloat(cajaActual.monto_inicial) || 0} />
                 </p>
               </div>
             </div>

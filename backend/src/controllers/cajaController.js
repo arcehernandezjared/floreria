@@ -83,4 +83,40 @@ async function reabrir(req, res) {
   }
 }
 
-module.exports = { ensureTable, getActual, abrir, reabrir };
+// ── Editar el monto inicial de una fecha (corrige errores sin tocar la BD a mano) ──
+// Si esa fecha ya tiene un cierre guardado en el historial, lo recalcula
+// (efectivo_esperado y diferencia_caja) para que quede consistente.
+async function editarMontoInicial(req, res) {
+  try {
+    const { fecha } = req.params;
+    const nuevoMonto = parseFloat(req.body.monto_inicial);
+    if (isNaN(nuevoMonto) || nuevoMonto < 0) {
+      return res.status(400).json({ success: false, message: 'Monto inválido' });
+    }
+
+    const sesion = await queryOne('SELECT * FROM caja_sesiones WHERE fecha = ?', [fecha]);
+    if (!sesion) return res.status(404).json({ success: false, message: 'No hay caja registrada esa fecha' });
+
+    await query('UPDATE caja_sesiones SET monto_inicial = ? WHERE fecha = ?', [nuevoMonto, fecha]);
+
+    // Si ya existe un cierre (historial) para esta fecha, recalcular para que no quede desfasado
+    const cierre = await queryOne('SELECT * FROM cierres_dia WHERE fecha = ?', [fecha]);
+    if (cierre) {
+      const efectivoEsperado = nuevoMonto + parseFloat(cierre.ventas_efectivo || 0);
+      const diferencia = parseFloat(cierre.efectivo_caja || 0) - efectivoEsperado;
+      await query(
+        'UPDATE cierres_dia SET monto_inicial = ?, efectivo_esperado = ?, diferencia_caja = ? WHERE fecha = ?',
+        [nuevoMonto, efectivoEsperado, diferencia, fecha]
+      );
+    }
+
+    const actualizada = await queryOne('SELECT * FROM caja_sesiones WHERE fecha = ?', [fecha]);
+    logger.info(`Monto inicial de caja ${fecha} editado a ₡${nuevoMonto} por ${req.user?.nombre || '—'}`);
+    res.json({ success: true, data: actualizada, message: 'Monto inicial actualizado correctamente' });
+  } catch (e) {
+    logger.error(`editarMontoInicial: ${e.message}`);
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+module.exports = { ensureTable, getActual, abrir, reabrir, editarMontoInicial };
