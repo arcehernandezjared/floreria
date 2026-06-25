@@ -27,6 +27,7 @@ const cotizacionRoutes     = require('./src/routes/cotizaciones');
 const ventasRoutes         = require('./src/routes/ventas');
 const pedidosRoutes        = require('./src/routes/pedidos');
 const cierresRoutes        = require('./src/routes/cierres');
+const cajaRoutes           = require('./src/routes/caja');
 const { startAlertScheduler } = require('./src/services/alertScheduler');
 
 const app = express();
@@ -69,6 +70,7 @@ app.use('/api/cotizaciones',   cotizacionRoutes);
 app.use('/api/ventas',         ventasRoutes);
 app.use('/api/pedidos',        pedidosRoutes);
 app.use('/api/cierres',        cierresRoutes);
+app.use('/api/caja',           cajaRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', sistema: 'Floristería Alma Caribeña', timestamp: new Date() });
@@ -90,8 +92,11 @@ async function start() {
   await connectDB();
   await require('./src/controllers/catalogoController').ensureCodigo();
   await require('./src/controllers/catalogoController').ensureCanalPedido();
+  await require('./src/controllers/catalogoController').ensureFormaPago();
   await require('./src/controllers/insumoController').ensureCodigoInsumos();
   await require('./src/controllers/cierresController').ensureTable();
+  await require('./src/controllers/cajaController').ensureTable();
+  await require('./src/controllers/pedidosController').ensureTable();
   require('./src/services/sync/phpCatalogSync').ensureSyncSchema().catch(e => logger.warn(`phpCatalogSync init: ${e.message}`));
   startAlertScheduler();
 

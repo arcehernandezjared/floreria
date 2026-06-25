@@ -26,6 +26,14 @@ async function ensureCodigo() {
   } catch (_) {}
 }
 
+// Agrega la forma de pago real con la que se cobró cada venta (distinta del
+// canal, que indica el origen: mostrador/whatsapp/externo/pedido)
+async function ensureFormaPago() {
+  try {
+    await query(`ALTER TABLE ventas_floreria ADD COLUMN forma_pago ENUM('efectivo','tarjeta','sinpe') NOT NULL DEFAULT 'efectivo'`);
+  } catch (_) {}
+}
+
 // Agrega 'pedido' como canal válido — ventas generadas por adelanto/saldo de pedidos
 async function ensureCanalPedido() {
   try {
@@ -252,7 +260,7 @@ async function recalcularCostos(req, res) {
 
 async function registrarVenta(req, res) {
   try {
-    const { catalogo_id, nombre_cliente, canal, precio_venta, notas, ref_externa, fecha_entrega } = req.body;
+    const { catalogo_id, nombre_cliente, canal, precio_venta, notas, ref_externa, fecha_entrega, forma_pago } = req.body;
 
     const arreglo = await queryOne('SELECT * FROM catalogo WHERE id = ? AND activo = 1', [catalogo_id]);
     if (!arreglo) return res.status(404).json({ success: false, message: 'Arreglo no encontrado' });
@@ -278,11 +286,11 @@ async function registrarVenta(req, res) {
     await transaction(async (conn) => {
       // Registrar venta
       await conn.query(
-        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, ref_externa, precio_venta, costo_produccion, notas, nombre_cliente, fecha_entrega)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, ref_externa, precio_venta, costo_produccion, notas, nombre_cliente, fecha_entrega, forma_pago)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [catalogo_id, arreglo.nombre, canal || 'mostrador', ref_externa || null,
          precio_venta || arreglo.precio_venta, costo_produccion, notas || null,
-         nombre_cliente || null, fecha_entrega || null]
+         nombre_cliente || null, fecha_entrega || null, forma_pago || 'efectivo']
       );
 
       // Descontar stock de todos los insumos de la ficha
@@ -310,7 +318,7 @@ async function registrarVenta(req, res) {
 
 async function registrarVentaLote(req, res) {
   try {
-    const { items, nombre_cliente, canal, descuento } = req.body;
+    const { items, nombre_cliente, canal, descuento, forma_pago } = req.body;
     // items: [{ catalogo_id, precio_venta, cantidad, notas }]
     if (!items || items.length === 0)
       return res.status(400).json({ success: false, message: 'Sin items' });
@@ -352,10 +360,10 @@ async function registrarVentaLote(req, res) {
 
         for (let n = 0; n < cant; n++) {
           await conn.query(
-            `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, notas)
-             VALUES (?,?,?,?,?,?,?)`,
+            `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, notas, forma_pago)
+             VALUES (?,?,?,?,?,?,?,?)`,
             [arreglo.id, arreglo.nombre, canal || 'mostrador', precioFinal, costo,
-             nombre_cliente || null, item.notas || null]
+             nombre_cliente || null, item.notas || null, forma_pago || 'efectivo']
           );
         }
 
@@ -405,7 +413,7 @@ async function registrarVentaPOS(req, res) {
   try {
     const {
       catalogo_items = [], insumo_items = [], mano_de_obra = 0,
-      nombre_cliente, canal, descuento
+      nombre_cliente, canal, descuento, forma_pago
     } = req.body;
 
     if (catalogo_items.length === 0 && insumo_items.length === 0 && parseFloat(mano_de_obra) <= 0) {
@@ -462,9 +470,9 @@ async function registrarVentaPOS(req, res) {
 
         for (let n = 0; n < cant; n++) {
           await conn.query(
-            `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, notas)
-             VALUES (?,?,?,?,?,?,?)`,
-            [arreglo.id, arreglo.nombre, canal || 'mostrador', precioFinal, costo, nombre_cliente || null, item.notas || null]
+            `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, notas, forma_pago)
+             VALUES (?,?,?,?,?,?,?,?)`,
+            [arreglo.id, arreglo.nombre, canal || 'mostrador', precioFinal, costo, nombre_cliente || null, item.notas || null, forma_pago || 'efectivo']
           );
         }
 
@@ -504,12 +512,12 @@ async function registrarVentaPOS(req, res) {
         const costoTotal = parseFloat(insumo.costo_unitario) * cantidad;
 
         await conn.query(
-          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, insumo_id, cantidad_insumo)
-           VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, insumo_id, cantidad_insumo, forma_pago)
+           VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             `${insumo.nombre} \xD7${fmtCantidadPOS(cantidad)} ${insumo.unidad}`,
             canal || 'mostrador', precioTotal, costoTotal,
-            nombre_cliente || 'Cliente mostrador', item.insumo_id, cantidad
+            nombre_cliente || 'Cliente mostrador', item.insumo_id, cantidad, forma_pago || 'efectivo'
           ]
         );
       }
@@ -519,9 +527,9 @@ async function registrarVentaPOS(req, res) {
       const manoNum = parseFloat(mano_de_obra) || 0;
       if (manoNum > 0) {
         await conn.query(
-          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente)
-           VALUES (NULL, 'Mano de obra', ?, ?, 0, ?)`,
-          [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador']
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, forma_pago)
+           VALUES (NULL, 'Mano de obra', ?, ?, 0, ?, ?)`,
+          [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador', forma_pago || 'efectivo']
         );
       }
     });
@@ -628,7 +636,7 @@ async function uploadImagen(req, res) {
 
 async function ventaPersonalizada(req, res) {
   try {
-    const { ingredientes, precio_venta, nombre_cliente, canal, notas, guardar_catalogo, nombre_arreglo, categoria, imagen_url } = req.body;
+    const { ingredientes, precio_venta, nombre_cliente, canal, notas, guardar_catalogo, nombre_arreglo, categoria, imagen_url, forma_pago } = req.body;
 
     if (!ingredientes || ingredientes.length === 0)
       return res.status(400).json({ success: false, message: 'Agrega al menos un ingrediente' });
@@ -665,9 +673,9 @@ async function ventaPersonalizada(req, res) {
       }
 
       await conn.query(
-        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, notas, nombre_cliente)
-         VALUES (?,?,?,?,?,?,?)`,
-        [catalogo_id, nombreArreglo, canal || 'mostrador', precio_venta, costo_produccion, notas || null, nombre_cliente || null]
+        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, notas, nombre_cliente, forma_pago)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [catalogo_id, nombreArreglo, canal || 'mostrador', precio_venta, costo_produccion, notas || null, nombre_cliente || null, forma_pago || 'efectivo']
       );
 
       for (const ins of insumosData) {
@@ -733,4 +741,4 @@ async function importarDesdePhp(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, ensureCanalPedido, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
+module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };

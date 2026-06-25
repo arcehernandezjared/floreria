@@ -50,6 +50,10 @@ async function getProfile(req, res) {
 async function changePassword(req, res) {
   try {
     const { currentPassword, newPassword } = req.body;
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'La nueva contraseña debe tener al menos 8 caracteres' });
+    }
+
     const user = await queryOne('SELECT password_hash FROM usuarios WHERE id = ?', [req.user.id]);
 
     if (!(await bcrypt.compare(currentPassword, user.password_hash))) {

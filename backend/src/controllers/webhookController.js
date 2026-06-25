@@ -1,18 +1,29 @@
+const crypto = require('crypto');
 const { query, queryOne, transaction } = require('../config/database');
 const { calcularMargen } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
+// Comparación en tiempo constante — evita que un atacante deduzca la API key
+// midiendo cuánto tarda la respuesta carácter por carácter.
+function apiKeyValida(recibida) {
+  const esperada = process.env.WEBHOOK_API_KEY || '';
+  if (!recibida || typeof recibida !== 'string') return false;
+  const a = Buffer.from(recibida);
+  const b = Buffer.from(esperada);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 async function recibirVentaExterna(req, res) {
   try {
-    // Autenticación por API key
-    const apiKey = req.headers['x-api-key'];
-    if (!apiKey || apiKey !== process.env.WEBHOOK_API_KEY) {
+    if (!apiKeyValida(req.headers['x-api-key'])) {
       return res.status(401).json({ success: false, message: 'API key inválida' });
     }
 
     const { producto_nombre, precio, cliente, ref_externa, canal } = req.body;
-    if (!producto_nombre || !precio) {
-      return res.status(400).json({ success: false, message: 'producto_nombre y precio son requeridos' });
+    const precioNum = parseFloat(precio);
+    if (!producto_nombre || !precio || isNaN(precioNum) || precioNum <= 0) {
+      return res.status(400).json({ success: false, message: 'producto_nombre y un precio válido (mayor a 0) son requeridos' });
     }
 
     // Buscar arreglo en catálogo por nombre (fuzzy)
@@ -50,7 +61,7 @@ async function recibirVentaExterna(req, res) {
       await conn.query(
         `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, ref_externa, precio_venta, costo_produccion, nombre_cliente)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [arreglo.id, arreglo.nombre, canal || 'externo', ref_externa || null, precio, costo_produccion, cliente || null]
+        [arreglo.id, arreglo.nombre, canal || 'externo', ref_externa || null, precioNum, costo_produccion, cliente || null]
       );
 
       for (const ing of ingredientes) {
@@ -67,12 +78,12 @@ async function recibirVentaExterna(req, res) {
       }
     });
 
-    logger.info(`Venta externa recibida: ${arreglo.nombre} por ₡${precio} - Cliente: ${cliente}`);
+    logger.info(`Venta externa recibida: ${arreglo.nombre} por ₡${precioNum} - Cliente: ${cliente}`);
 
     res.json({
       success: true,
       message: 'Venta registrada correctamente',
-      data: { arreglo: arreglo.nombre, precio, costo_produccion }
+      data: { arreglo: arreglo.nombre, precio: precioNum, costo_produccion }
     });
   } catch (error) {
     logger.error(`webhookVenta: ${error.message}`);

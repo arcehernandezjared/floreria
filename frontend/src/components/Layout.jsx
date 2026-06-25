@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, ShoppingBag, Trash2, Truck,
   Receipt, DollarSign, ShoppingCart, Menu, X, Bell, Flower2, LogOut,
   CreditCard, MessageSquare, BarChart2, ClipboardList, FileText,
-  AlertTriangle, Calendar, TrendingDown, CheckCircle, Lock
+  AlertTriangle, Calendar, TrendingDown, CheckCircle, Lock, Wallet
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   { path: '/cotizaciones',     icon: FileText,        label: 'Presupuestos' },
   { path: '/whatsapp',         icon: MessageSquare,   label: 'WhatsApp' },
   { path: '/reportes',         icon: BarChart2,       label: 'Reportes' },
-  { path: '/cierre',           icon: CheckCircle,     label: 'Cierre del Día' },
+  { path: '/caja',             icon: Wallet,          label: 'Caja' },
 ];
 
 const NOTIF_ICONS = {
@@ -326,15 +326,14 @@ export default function Layout() {
               {summaryPendiente && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   {[
-                    { label: 'Ventas', valor: summaryPendiente.ventas_count, sub: formatMoney(summaryPendiente.ventas_total), color: 'text-emerald-400' },
-                    { label: 'Gastos', valor: formatMoney(summaryPendiente.gastos_total), color: 'text-red-400' },
+                    { label: 'Efectivo', valor: formatMoney(summaryPendiente.ventas_efectivo), color: 'text-emerald-400' },
+                    { label: 'Tarjeta', valor: formatMoney(summaryPendiente.ventas_tarjeta), color: 'text-sky-400' },
+                    { label: 'Sinpe', valor: formatMoney(summaryPendiente.ventas_sinpe), color: 'text-purple-400' },
                     { label: 'Mermas', valor: formatMoney(summaryPendiente.mermas_total), color: 'text-orange-400' },
-                    { label: 'Utilidad', valor: formatMoney(summaryPendiente.utilidad), color: parseFloat(summaryPendiente.utilidad) >= 0 ? 'text-blue-400' : 'text-red-400' },
-                  ].map(({ label, valor, sub, color }) => (
+                  ].map(({ label, valor, color }) => (
                     <div key={label} className="bg-gray-800/80 rounded-xl p-3 text-center">
                       <p className="text-xs text-gray-500 mb-1">{label}</p>
                       <p className={`text-base font-bold tabular-nums ${color}`}>{valor}</p>
-                      {sub && <p className="text-xs text-gray-600">{sub}</p>}
                     </div>
                   ))}
                 </div>
@@ -344,7 +343,7 @@ export default function Layout() {
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="label text-xs">Efectivo en caja (₡)</label>
+                    <label className="label text-xs">Efectivo contado en caja (₡)</label>
                     <input type="number" min="0" step="500"
                       className="input text-sm"
                       placeholder="¿Cuánto hay en caja?"
@@ -352,14 +351,14 @@ export default function Layout() {
                       onChange={e => setEfectivoCierre(e.target.value)} />
                   </div>
                   <div>
-                    <label className="label text-xs">Diferencia</label>
+                    <label className="label text-xs">Diferencia vs. esperado</label>
                     <div className={`input text-sm font-bold tabular-nums ${
                       efectivoCierre && summaryPendiente
-                        ? parseFloat(efectivoCierre) >= parseFloat(summaryPendiente.ventas_total) ? 'text-emerald-400' : 'text-red-400'
+                        ? parseFloat(efectivoCierre) >= parseFloat(summaryPendiente.efectivo_esperado) ? 'text-emerald-400' : 'text-red-400'
                         : 'text-gray-600'
                     }`}>
                       {efectivoCierre && summaryPendiente
-                        ? formatMoney(parseFloat(efectivoCierre) - parseFloat(summaryPendiente.ventas_total))
+                        ? formatMoney(parseFloat(efectivoCierre) - parseFloat(summaryPendiente.efectivo_esperado))
                         : '—'}
                     </div>
                   </div>

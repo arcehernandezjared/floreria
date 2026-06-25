@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, Flower2,
   User, Tag, X, Leaf, LayoutGrid, Printer, Mail, Send, AtSign, Layers, Wand2,
-  Camera, ImagePlus
+  Camera, ImagePlus, Wallet, Banknote, CreditCard, Smartphone, ClipboardList
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import api, { formatMoney } from '../utils/api';
@@ -21,6 +21,12 @@ const CANALES = [
   { value: 'mostrador', label: 'Mostrador' },
   { value: 'whatsapp',  label: 'WhatsApp' },
   { value: 'externo',   label: 'App Externa' },
+];
+
+const FORMAS_PAGO = [
+  { value: 'efectivo', label: 'Efectivo', Icon: Banknote },
+  { value: 'tarjeta',  label: 'Tarjeta',  Icon: CreditCard },
+  { value: 'sinpe',    label: 'Sinpe',    Icon: Smartphone },
 ];
 
 const TIPO_COLOR = {
@@ -416,7 +422,12 @@ export default function PuntoVentaPage() {
   const [cliente, setCliente]       = useState('');
   const [emailCliente, setEmailCliente] = useState('');
   const [canal, setCanal]           = useState('mostrador');
+  const [formaPago, setFormaPago]   = useState('efectivo');
   const [descuento, setDescuento]   = useState(0);
+  const [montoApertura, setMontoApertura] = useState('');
+  const [modalAbono, setModalAbono] = useState(null);
+  const [montoAbono, setMontoAbono] = useState('');
+  const [formaPagoAbono, setFormaPagoAbono] = useState('efectivo');
   const [manoDeObra, setManoDeObra] = useState(() => parseFloat(localStorage.getItem('pos_mano_obra') || '0') || 0);
   const [modalConfirm, setModalConfirm] = useState(false);
   const [ventaSnapshot, setVentaSnapshot] = useState(null);
@@ -436,6 +447,55 @@ export default function PuntoVentaPage() {
   });
   const isLoading = tab === 'arreglos' ? loadingCat : loadingIns;
 
+  // ── Caja del día — bloquea la venta hasta que se abra ──────────────────
+  const { data: cajaActual, isLoading: loadingCaja } = useQuery({
+    queryKey: ['caja-actual'],
+    queryFn: () => api.get('/caja/actual').then(r => r.data.data),
+  });
+  const cajaAbierta = cajaActual && cajaActual.estado === 'abierta';
+  const cajaCerradaHoy = cajaActual && cajaActual.estado === 'cerrada';
+
+  const abrirCajaMut = useMutation({
+    mutationFn: (data) => api.post('/caja/abrir', data),
+    onSuccess: () => {
+      qc.invalidateQueries(['caja-actual']);
+      toast.success('Caja abierta — ya podés vender');
+      setMontoApertura('');
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al abrir caja'),
+  });
+
+  const reabrirCajaMut = useMutation({
+    mutationFn: () => api.post('/caja/reabrir'),
+    onSuccess: () => {
+      qc.invalidateQueries(['caja-actual']);
+      toast.success('Caja reabierta — ya podés vender');
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al reabrir caja'),
+  });
+
+  // ── Pedidos pendientes de pago — para cobrar abonos desde el POS ────────
+  const { data: pedidos = [] } = useQuery({
+    queryKey: ['pedidos'],
+    queryFn: () => api.get('/pedidos').then(r => r.data.data),
+    enabled: tab === 'pedidos-pendientes',
+  });
+  const pedidosPendientes = pedidos.filter(p =>
+    (p.estado === 'pendiente' || p.estado === 'listo') &&
+    (parseFloat(p.precio) || 0) - (parseFloat(p.adelanto) || 0) > 0
+  );
+
+  const abonoMut = useMutation({
+    mutationFn: ({ id, monto, tipo_pago }) => api.post(`/pedidos/${id}/abono`, { monto, tipo_pago }),
+    onSuccess: () => {
+      qc.invalidateQueries(['pedidos']);
+      toast.success('Abono registrado');
+      setModalAbono(null);
+      setMontoAbono('');
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al registrar abono'),
+  });
+
   // ── Totales ───────────────────────────────────────────────────────────
   const subtotalProductos = carrito.reduce((s, i) =>
     s + (i.tipo === 'insumo' ? i.precio_unitario : i.precio_venta) * i.cantidad, 0);
@@ -445,7 +505,7 @@ export default function PuntoVentaPage() {
 
   // ── Venta personalizada mutation ──────────────────────────────────────
   const ventaPersonalizadaMut = useMutation({
-    mutationFn: (data) => api.post('/catalogo/venta-personalizada', { ...data, canal }),
+    mutationFn: (data) => api.post('/catalogo/venta-personalizada', { ...data, canal, forma_pago: formaPago }),
     onSuccess: (res) => {
       qc.invalidateQueries(['catalogo-pos']);
       qc.invalidateQueries(['insumos-pos']);
@@ -480,6 +540,7 @@ export default function PuntoVentaPage() {
         mano_de_obra: manoDeObra,
         nombre_cliente: cliente || 'Cliente mostrador',
         canal,
+        forma_pago: formaPago,
         descuento,
         fecha: fechaCR,
       });
@@ -515,7 +576,7 @@ export default function PuntoVentaPage() {
     setCliente('');
     setEmailCliente('');
     setDescuento(0);
-    setPagoCliente('');
+    setFormaPago('efectivo');
     toast.success('Venta registrada');
   };
 
@@ -675,6 +736,13 @@ export default function PuntoVentaPage() {
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === 'venta-general' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
             <Layers size={15} /> Venta General
           </button>
+          <button onClick={() => setTab('pedidos-pendientes')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === 'pedidos-pendientes' ? 'bg-brand-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}`}>
+            <ClipboardList size={15} /> Pedidos pendientes
+            {pedidosPendientes.length > 0 && (
+              <span className="bg-yellow-500 text-gray-900 text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">{pedidosPendientes.length}</span>
+            )}
+          </button>
           <button onClick={() => setModalPersonalizado(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-gray-900 text-emerald-400 hover:text-emerald-300 ml-auto">
             <Wand2 size={15} /> A medida
@@ -748,7 +816,35 @@ export default function PuntoVentaPage() {
 
         {/* Grid */}
         <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
+          {tab === 'pedidos-pendientes' ? (
+            <div className="space-y-2">
+              {pedidosPendientes.length === 0 ? (
+                <p className="text-gray-600 text-sm text-center py-8">No hay pedidos con saldo pendiente</p>
+              ) : pedidosPendientes.map(p => {
+                const saldo = (parseFloat(p.precio) || 0) - (parseFloat(p.adelanto) || 0);
+                return (
+                  <div key={p.id} className="card flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white">#{p.numero} · {p.cliente_nombre || '(sin nombre)'}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Total {formatMoney(p.precio)} · Abonado {formatMoney(p.adelanto)}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0 flex items-center gap-3">
+                      <div>
+                        <p className="text-xs text-gray-500">Saldo</p>
+                        <p className="text-base font-bold text-yellow-400 tabular-nums">{formatMoney(saldo)}</p>
+                      </div>
+                      <button onClick={() => { setModalAbono(p); setMontoAbono(String(saldo)); setFormaPagoAbono(p.tipo_pago || 'efectivo'); }}
+                        className="btn-primary text-xs py-1.5 px-3">
+                        <Wallet size={13} /> Abonar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center h-40">
               <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
@@ -958,6 +1054,16 @@ export default function PuntoVentaPage() {
                     {CANALES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
+                <div className="flex gap-1.5">
+                  {FORMAS_PAGO.map(({ value, label, Icon }) => (
+                    <button key={value} type="button" onClick={() => setFormaPago(value)}
+                      className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                        formaPago === value ? 'bg-brand-600/20 border-brand-600/40 text-brand-400' : 'border-gray-700 text-gray-400 hover:border-gray-600'
+                      }`}>
+                      <Icon size={12} /> {label}
+                    </button>
+                  ))}
+                </div>
                 <div className="relative">
                   <Tag size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input type="number" min="0" max="100" className="input w-full pl-8 text-sm py-2" placeholder="Descuento %"
@@ -1106,6 +1212,96 @@ export default function PuntoVentaPage() {
         )}
       </AnimatePresence>
 
+      {/* ── Modal Abonar pedido ── */}
+      <AnimatePresence>
+        {modalAbono && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="card w-full max-w-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-bold text-lg">Abonar pedido #{modalAbono.numero}</h3>
+                <button onClick={() => setModalAbono(null)} className="text-gray-500 hover:text-white"><X size={18} /></button>
+              </div>
+              <p className="text-sm text-gray-400 mb-4">
+                Saldo pendiente: <span className="text-yellow-400 font-bold">
+                  {formatMoney((parseFloat(modalAbono.precio) || 0) - (parseFloat(modalAbono.adelanto) || 0))}
+                </span>
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="label">Monto a abonar (₡)</label>
+                  <input type="number" min="0" step="100" className="input font-bold text-brand-400"
+                    value={montoAbono} onChange={e => setMontoAbono(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label mb-2 block">Forma de pago</label>
+                  <div className="flex gap-2">
+                    {FORMAS_PAGO.map(({ value, label, Icon }) => (
+                      <button key={value} type="button" onClick={() => setFormaPagoAbono(value)}
+                        className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-sm font-medium border transition-all ${
+                          formaPagoAbono === value ? 'bg-brand-600/20 border-brand-600/40 text-brand-400' : 'border-gray-700 text-gray-400 hover:border-gray-600'
+                        }`}>
+                        <Icon size={14} /> {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-5">
+                <button onClick={() => setModalAbono(null)} className="btn-secondary flex-1 text-sm">Cancelar</button>
+                <button
+                  onClick={() => abonoMut.mutate({ id: modalAbono.id, monto: parseFloat(montoAbono) || 0, tipo_pago: formaPagoAbono })}
+                  disabled={abonoMut.isPending} className="btn-primary flex-1 text-sm">
+                  {abonoMut.isPending ? 'Registrando...' : 'Confirmar abono'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal apertura/reapertura de caja — bloquea la venta hasta resolver ── */}
+      <AnimatePresence>
+        {!loadingCaja && !cajaAbierta && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-gray-950/95 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="card w-full max-w-sm text-center">
+              <div className="w-14 h-14 bg-yellow-500/15 border-2 border-yellow-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Wallet size={26} className="text-yellow-400" />
+              </div>
+              {cajaCerradaHoy ? (
+                <>
+                  <h2 className="text-xl font-bold text-white mb-1">Caja cerrada hoy</h2>
+                  <p className="text-gray-400 text-sm mb-5">Ya se cerró la caja de hoy. Reabrila para registrar otra venta.</p>
+                  <button
+                    onClick={() => reabrirCajaMut.mutate()}
+                    disabled={reabrirCajaMut.isPending}
+                    className="btn-primary w-full justify-center py-3">
+                    <CheckCircle size={16} /> {reabrirCajaMut.isPending ? 'Reabriendo...' : 'Reabrir caja y continuar'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-xl font-bold text-white mb-1">Abrir caja</h2>
+                  <p className="text-gray-400 text-sm mb-5">Antes de vender, indicá con cuánto efectivo inicia la caja hoy</p>
+                  <input type="number" min="0" step="500" className="input text-center font-bold text-lg mb-4"
+                    placeholder="Monto inicial en efectivo (₡)"
+                    value={montoApertura} onChange={e => setMontoApertura(e.target.value)} />
+                  <button
+                    onClick={() => abrirCajaMut.mutate({ monto_inicial: parseFloat(montoApertura) || 0 })}
+                    disabled={abrirCajaMut.isPending}
+                    className="btn-primary w-full justify-center py-3">
+                    <CheckCircle size={16} /> {abrirCajaMut.isPending ? 'Abriendo...' : 'Abrir caja y continuar'}
+                  </button>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Modal confirmación ── */}
       <AnimatePresence>
         {modalConfirm && (
@@ -1142,7 +1338,9 @@ export default function PuntoVentaPage() {
                 <span className="text-white">Total</span>
                 <span className="text-brand-400">{formatMoney(total)}</span>
               </div>
-              {cliente && <p className="text-xs text-gray-500 mb-4">Cliente: {cliente} · {canal}</p>}
+              <p className="text-xs text-gray-500 mb-4">
+                {cliente && <>Cliente: {cliente} · </>}{canal} · {FORMAS_PAGO.find(f => f.value === formaPago)?.label}
+              </p>
               <div className="flex gap-3">
                 <button onClick={() => setModalConfirm(false)} className="btn-secondary flex-1 text-sm">Cancelar</button>
                 <button onClick={() => ventaMutation.mutate()} disabled={ventaMutation.isPending} className="btn-primary flex-1 text-sm">

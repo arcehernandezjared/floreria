@@ -39,12 +39,11 @@ export default function NominaPage() {
 
   // ── Valores de configuración ──────────────────────────────────────────────
   const salariosMonto = parseFloat(config?.salarios_monto || 0);
-  const gastos        = parseFloat(config?.gastos_meta    || 0);
   const diasLab       = parseInt(config?.dias_laborales   || 26);
   const numEmpleados  = parseInt(config?.num_empleados    || 1);
 
-  // Meta mensual = gastos + salarios (monto fijo)
-  const metaMensual      = gastos + salariosMonto;
+  // Meta mensual = solo salarios (los gastos se llevan en su propio módulo)
+  const metaMensual      = salariosMonto;
   const ventaDiaria      = diasLab > 0 ? metaMensual / diasLab : 0;
   const salarioPorPersoa = numEmpleados > 0 ? salariosMonto / numEmpleados : salariosMonto;
 
@@ -60,7 +59,7 @@ export default function NominaPage() {
   const barColor = pctMeta >= 75 ? '#10b981' : pctMeta >= 40 ? '#f59e0b' : '#ef4444';
 
   // ── Preview en modal ──────────────────────────────────────────────────────
-  const prevMeta   = parseFloat(form.gastos_meta || 0) + parseFloat(form.salarios_monto || 0);
+  const prevMeta   = parseFloat(form.salarios_monto || 0);
   const prevDiario = parseInt(form.dias_laborales || 26) > 0 ? prevMeta / parseInt(form.dias_laborales || 26) : 0;
   const prevPersoa = parseInt(form.num_empleados || 1) > 0
     ? parseFloat(form.salarios_monto || 0) / parseInt(form.num_empleados || 1) : 0;
@@ -69,7 +68,6 @@ export default function NominaPage() {
     setForm({
       salarios_monto: config?.salarios_monto || 0,
       num_empleados:  config?.num_empleados  || 1,
-      gastos_meta:    config?.gastos_meta    || 0,
       dias_laborales: config?.dias_laborales || 26,
     });
     setEditando(true);
@@ -102,7 +100,7 @@ export default function NominaPage() {
 
         {metaMensual === 0 && (
           <div className="mt-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-3">
-            <p className="text-yellow-400 text-sm">Configura tus gastos y salarios para ver la meta</p>
+            <p className="text-yellow-400 text-sm">Configura los salarios para ver la meta</p>
           </div>
         )}
       </div>
@@ -112,14 +110,6 @@ export default function NominaPage() {
         <div className="card">
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Desglose mensual</h2>
           <div className="space-y-3">
-            <div className="flex justify-between items-center py-2 border-b border-gray-800">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-red-400" />
-                <span className="text-sm text-gray-300">Gastos del mes</span>
-              </div>
-              <span className="text-white font-semibold tabular-nums">{formatMoney(Math.round(gastos))}</span>
-            </div>
-
             <div className="flex justify-between items-center py-2 border-b border-gray-800">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-brand-400" />
@@ -269,15 +259,6 @@ export default function NominaPage() {
                     {formatMoney(Math.round(parseFloat(form.salarios_monto) / parseInt(form.num_empleados)))} por persona
                   </p>
                 )}
-              </div>
-
-              {/* Gastos */}
-              <div>
-                <label className="label">Gastos del mes (₡)</label>
-                <input className="input" type="number" step="1000" placeholder="Ej: 400000"
-                  value={form.gastos_meta}
-                  onChange={e => setForm(p => ({ ...p, gastos_meta: e.target.value }))} />
-                <p className="text-xs text-gray-600 mt-1">Alquiler, servicios, materiales, etc.</p>
               </div>
 
               {/* Días laborales */}

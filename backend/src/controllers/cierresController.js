@@ -1,4 +1,4 @@
-const { query, queryOne } = require('../config/database');
+const { query, queryOne, addColumnIfMissing } = require('../config/database');
 const logger = require('../utils/logger');
 const { registrarProvisionNomina } = require('./nominaController');
 
@@ -17,39 +17,72 @@ async function ensureTable() {
     usuario_nombre VARCHAR(200),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`);
+  // Migración: desglose de caja por forma de pago (monto contado = efectivo_caja)
+  await addColumnIfMissing('cierres_dia', 'monto_inicial', 'DECIMAL(12,2) DEFAULT 0');
+  await addColumnIfMissing('cierres_dia', 'ventas_efectivo', 'DECIMAL(12,2) DEFAULT 0');
+  await addColumnIfMissing('cierres_dia', 'ventas_tarjeta', 'DECIMAL(12,2) DEFAULT 0');
+  await addColumnIfMissing('cierres_dia', 'ventas_sinpe', 'DECIMAL(12,2) DEFAULT 0');
+  await addColumnIfMissing('cierres_dia', 'efectivo_esperado', 'DECIMAL(12,2) DEFAULT 0');
+  await addColumnIfMissing('cierres_dia', 'diferencia_caja', 'DECIMAL(12,2) DEFAULT 0');
+}
+
+// ── Ventas del día agrupadas por forma de pago ──────────────────────────────
+async function getDesglosePago(fecha) {
+  const filas = await query(
+    `SELECT forma_pago, COALESCE(SUM(precio_venta), 0) as total
+     FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?
+     GROUP BY forma_pago`,
+    [fecha]
+  );
+  const desglose = { efectivo: 0, tarjeta: 0, sinpe: 0 };
+  for (const f of filas) desglose[f.forma_pago] = parseFloat(f.total);
+  return desglose;
 }
 
 // ── Verificar si hay días pendientes de cierre ─────────────────────────────
+// Se considera pendiente un día anterior a hoy si: tuvo ventas sin cierre
+// registrado, O si su caja quedó abierta y nunca se cerró (aunque no haya
+// tenido ventas) — en ambos casos hay que obligar el cierre antes de seguir.
 async function checkPendiente(req, res) {
   try {
     const crtz = { timeZone: 'America/Costa_Rica' };
     const hoy = new Date().toLocaleDateString('en-CA', crtz);
 
-    // Buscar días anteriores a hoy que tengan ventas y no tengan cierre
-    const pendientes = await query(`
-      SELECT DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) as dia,
-             COUNT(*) as ventas_count,
-             COALESCE(SUM(v.precio_venta), 0) as ventas_total
-      FROM ventas_floreria v
-      WHERE DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) < ?
-        AND DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) NOT IN (SELECT fecha FROM cierres_dia)
-      GROUP BY DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00'))
-      ORDER BY dia ASC
-      LIMIT 1
-    `, [hoy]);
+    const [pendientesVentas, cajaSinCerrar] = await Promise.all([
+      query(`
+        SELECT DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) as dia
+        FROM ventas_floreria v
+        WHERE DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) < ?
+          AND DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) NOT IN (SELECT fecha FROM cierres_dia)
+        GROUP BY DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00'))
+      `, [hoy]),
+      query(`SELECT fecha FROM caja_sesiones WHERE estado = 'abierta' AND fecha < ?`, [hoy])
+    ]);
 
-    if (!pendientes.length) {
+    const diasPendientes = new Set([
+      ...pendientesVentas.map(p => p.dia instanceof Date ? p.dia.toISOString().split('T')[0] : String(p.dia)),
+      ...cajaSinCerrar.map(c => c.fecha instanceof Date ? c.fecha.toISOString().split('T')[0] : String(c.fecha))
+    ]);
+
+    if (diasPendientes.size === 0) {
       return res.json({ success: true, data: { pendiente: false } });
     }
 
-    const dia = pendientes[0];
+    const fecha = [...diasPendientes].sort()[0];
+
+    const ventasDia = await queryOne(
+      `SELECT COUNT(*) as ventas_count, COALESCE(SUM(precio_venta), 0) as ventas_total
+       FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`,
+      [fecha]
+    );
+
     res.json({
       success: true,
       data: {
         pendiente: true,
-        fecha: dia.dia,
-        ventas_count: dia.ventas_count,
-        ventas_total: dia.ventas_total
+        fecha,
+        ventas_count: ventasDia.ventas_count,
+        ventas_total: ventasDia.ventas_total
       }
     });
   } catch (e) {
@@ -92,6 +125,11 @@ async function getSummary(req, res) {
     // Fórmula: ventas − gastos − mermas (sin costos de producción, sin nómina en preview)
     const utilidad = parseFloat(ventas.total) - parseFloat(gastos.total) - parseFloat(mermas.total);
 
+    const desglosePago = await getDesglosePago(fecha);
+    const sesionCaja = await queryOne('SELECT * FROM caja_sesiones WHERE fecha = ?', [fecha]);
+    const montoInicial = sesionCaja ? parseFloat(sesionCaja.monto_inicial) : 0;
+    const efectivoEsperado = montoInicial + desglosePago.efectivo;
+
     res.json({
       success: true,
       data: {
@@ -104,6 +142,11 @@ async function getSummary(req, res) {
         efectivo_ventas: parseFloat(ventas.efectivo),
         detalle_ventas:  detalleVentas,
         detalle_gastos:  detalleGastos,
+        ventas_efectivo:   desglosePago.efectivo,
+        ventas_tarjeta:    desglosePago.tarjeta,
+        ventas_sinpe:      desglosePago.sinpe,
+        monto_inicial:     montoInicial,
+        efectivo_esperado: efectivoEsperado,
       }
     });
   } catch (e) {
@@ -140,19 +183,36 @@ async function createCierre(req, res) {
     // Rentabilidad = ventas − nómina − gastos − mermas
     const utilidad = parseFloat(ventas.total) - provisionRegistrada - parseFloat(gastos.total) - parseFloat(mermas.total);
 
+    // ── Desglose de caja: cuánto debería haber en efectivo según las ventas ──
+    const desglosePago = await getDesglosePago(fecha);
+    const sesionCaja = await queryOne('SELECT * FROM caja_sesiones WHERE fecha = ?', [fecha]);
+    const montoInicial = sesionCaja ? parseFloat(sesionCaja.monto_inicial) : 0;
+    const efectivoContado = parseFloat(efectivo_caja) || 0;
+    const efectivoEsperado = montoInicial + desglosePago.efectivo;
+    const diferenciaCaja = efectivoContado - efectivoEsperado;
+
     await query(
-      `INSERT INTO cierres_dia (fecha, ventas_count, ventas_total, costos_total, gastos_total, mermas_total, utilidad, efectivo_caja, notas, usuario_nombre)
-       VALUES (?,?,?,?,?,?,?,?,?,?)
+      `INSERT INTO cierres_dia (fecha, ventas_count, ventas_total, costos_total, gastos_total, mermas_total, utilidad, efectivo_caja, notas, usuario_nombre,
+         monto_inicial, ventas_efectivo, ventas_tarjeta, ventas_sinpe, efectivo_esperado, diferencia_caja)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
          ventas_count=VALUES(ventas_count), ventas_total=VALUES(ventas_total),
          costos_total=VALUES(costos_total), gastos_total=VALUES(gastos_total),
          mermas_total=VALUES(mermas_total), utilidad=VALUES(utilidad),
-         efectivo_caja=VALUES(efectivo_caja), notas=VALUES(notas), usuario_nombre=VALUES(usuario_nombre)`,
+         efectivo_caja=VALUES(efectivo_caja), notas=VALUES(notas), usuario_nombre=VALUES(usuario_nombre),
+         monto_inicial=VALUES(monto_inicial), ventas_efectivo=VALUES(ventas_efectivo),
+         ventas_tarjeta=VALUES(ventas_tarjeta), ventas_sinpe=VALUES(ventas_sinpe),
+         efectivo_esperado=VALUES(efectivo_esperado), diferencia_caja=VALUES(diferencia_caja)`,
       [fecha, ventas.count, ventas.total, provisionRegistrada.toFixed(2), gastos.total, mermas.total,
-       utilidad.toFixed(2), parseFloat(efectivo_caja) || 0, notas || null, usuario_nombre || null]
+       utilidad.toFixed(2), efectivoContado, notas || null, usuario_nombre || null,
+       montoInicial, desglosePago.efectivo, desglosePago.tarjeta, desglosePago.sinpe, efectivoEsperado, diferenciaCaja]
     );
 
-    logger.info(`Cierre registrado: ${fecha} — ₡${ventas.total} ventas, rentabilidad ₡${utilidad.toFixed(0)}, provisión ₡${provisionRegistrada.toFixed(0)}`);
+    if (sesionCaja && sesionCaja.estado === 'abierta') {
+      await query(`UPDATE caja_sesiones SET estado = 'cerrada', cerrada_en = NOW() WHERE fecha = ?`, [fecha]);
+    }
+
+    logger.info(`Cierre registrado: ${fecha} — ₡${ventas.total} ventas, rentabilidad ₡${utilidad.toFixed(0)}, provisión ₡${provisionRegistrada.toFixed(0)}, diferencia caja ₡${diferenciaCaja.toFixed(0)}`);
     res.json({ success: true, message: `Cierre del ${fecha} registrado correctamente`, provision: provisionRegistrada });
   } catch (e) {
     logger.error(`createCierre: ${e.message}`);

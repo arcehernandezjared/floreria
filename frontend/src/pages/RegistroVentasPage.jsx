@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, ShoppingBag, Filter,
   MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send, Plus, RotateCcw, Eye,
-  Flower2, Package, MapPin, Calendar
+  Flower2, Package, MapPin, Calendar, Banknote, CreditCard, Smartphone
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import api, { hoyCR } from '../utils/api';
@@ -14,6 +14,12 @@ const CANAL_LABELS = {
   externo:   { label: 'Externo',   icon: ShoppingCart, color: 'text-purple-400 bg-purple-500/10' },
   whatsapp:  { label: 'WhatsApp',  icon: MessageSquare, color: 'text-green-400 bg-green-500/10' },
   pedido:    { label: 'Pedidos',   icon: Package,       color: 'text-amber-400 bg-amber-500/10' },
+};
+
+const FORMA_PAGO_LABELS = {
+  efectivo: { label: 'Efectivo', icon: Banknote,    color: 'text-emerald-400 bg-emerald-500/10' },
+  tarjeta:  { label: 'Tarjeta',  icon: CreditCard,  color: 'text-sky-400 bg-sky-500/10' },
+  sinpe:    { label: 'Sinpe',    icon: Smartphone,  color: 'text-purple-400 bg-purple-500/10' },
 };
 
 function hoy()      { return hoyCR(); }
@@ -73,6 +79,11 @@ function generarReciboPDF(venta) {
   doc.text(numero, R, y, { align: 'right' }); y += 4;
   doc.text(`${fechaStr}  ${horaStr}`, M, y);
   doc.text(canalLabel, R, y, { align: 'right' }); y += 4;
+
+  const pagoLabel = (FORMA_PAGO_LABELS[venta.forma_pago]?.label || venta.forma_pago || '').toUpperCase();
+  if (pagoLabel) {
+    doc.text(`Pago: ${pagoLabel}`, M, y); y += 4;
+  }
 
   if (venta.nombre_cliente) {
     doc.text(`Cliente: ${venta.nombre_cliente}`, M, y); y += 4;
@@ -275,8 +286,10 @@ function ModalDetalleVenta({ ventaId, onClose }) {
   const costo  = parseFloat(detalle?.costo_produccion || 0);
   const margen = precio > 0 ? (((precio - costo) / precio) * 100).toFixed(1) : 0;
   const fecha  = detalle?.fecha
-    ? new Date(detalle.fecha).toLocaleString('es-CR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    ? new Date(detalle.fecha).toLocaleString('es-CR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Costa_Rica' })
     : '';
+  const pagoInfo = FORMA_PAGO_LABELS[detalle?.forma_pago] || { label: detalle?.forma_pago || '—', color: 'text-gray-400 bg-gray-700' };
+  const PagoIcon = pagoInfo.icon;
   const numero = detalle ? `VTA-${new Date(detalle.fecha).getFullYear()}-${String(detalle.id).padStart(6, '0')}` : '';
 
   return (
@@ -299,6 +312,12 @@ function ModalDetalleVenta({ ventaId, onClose }) {
               <div><p className="text-xs text-gray-500">Fecha</p><p className="text-white">{fecha}</p></div>
               <div><p className="text-xs text-gray-500">Cliente</p><p className="text-white">{detalle.nombre_cliente || '—'}</p></div>
               <div><p className="text-xs text-gray-500">Canal</p><p className="text-white capitalize">{detalle.canal}</p></div>
+              <div>
+                <p className="text-xs text-gray-500">Forma de pago</p>
+                <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg mt-0.5 ${pagoInfo.color}`}>
+                  {PagoIcon && <PagoIcon size={11} />}{pagoInfo.label}
+                </span>
+              </div>
             </div>
 
             <div>
@@ -535,7 +554,9 @@ export default function RegistroVentasPage() {
               const precio = parseFloat(v.precio_venta || 0);
               const canalInfo = CANAL_LABELS[v.canal] || { label: v.canal, color: 'text-gray-400 bg-gray-700' };
               const CanalIcon = canalInfo.icon;
-              const fecha = new Date(v.fecha).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+              const pagoInfo = FORMA_PAGO_LABELS[v.forma_pago] || { label: v.forma_pago || '—', color: 'text-gray-400 bg-gray-700' };
+              const PagoIcon = pagoInfo.icon;
+              const fecha = new Date(v.fecha).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Costa_Rica' });
               return (
                 <div key={v.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -547,6 +568,9 @@ export default function RegistroVentasPage() {
                     <div className="flex gap-1.5 items-center flex-wrap">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg ${canalInfo.color}`}>
                         {CanalIcon && <CanalIcon size={10} />}{canalInfo.label}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg ${pagoInfo.color}`}>
+                        {PagoIcon && <PagoIcon size={10} />}{pagoInfo.label}
                       </span>
                       {v.nombre_cliente && <span className="text-xs text-gray-500 truncate max-w-32">{v.nombre_cliente}</span>}
                     </div>
@@ -580,16 +604,17 @@ export default function RegistroVentasPage() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Arreglo</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Cliente</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Canal</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Forma de pago</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Precio venta</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/60">
               {isLoading ? (
-                <tr><td colSpan={6} className="text-center py-12 text-gray-600">Cargando...</td></tr>
+                <tr><td colSpan={7} className="text-center py-12 text-gray-600">Cargando...</td></tr>
               ) : ventas.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12">
+                  <td colSpan={7} className="text-center py-12">
                     <div className="flex flex-col items-center gap-2">
                       <ShoppingBag size={32} className="text-gray-700" />
                       <p className="text-gray-500 text-sm">No hay ventas en este período</p>
@@ -600,7 +625,9 @@ export default function RegistroVentasPage() {
                 const precio    = parseFloat(v.precio_venta || 0);
                 const canalInfo = CANAL_LABELS[v.canal] || { label: v.canal, color: 'text-gray-400 bg-gray-700' };
                 const CanalIcon = canalInfo.icon;
-                const fecha     = new Date(v.fecha).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const pagoInfo  = FORMA_PAGO_LABELS[v.forma_pago] || { label: v.forma_pago || '—', color: 'text-gray-400 bg-gray-700' };
+                const PagoIcon  = pagoInfo.icon;
+                const fecha     = new Date(v.fecha).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Costa_Rica' });
                 return (
                   <tr key={v.id} className="hover:bg-gray-800/30 transition-colors">
                     <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{fecha}</td>
@@ -609,6 +636,11 @@ export default function RegistroVentasPage() {
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg ${canalInfo.color}`}>
                         {CanalIcon && <CanalIcon size={11} />}{canalInfo.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg ${pagoInfo.color}`}>
+                        {PagoIcon && <PagoIcon size={11} />}{pagoInfo.label}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-emerald-400 font-semibold">

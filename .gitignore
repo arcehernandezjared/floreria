@@ -1,0 +1,18 @@
+node_modules
+.env
+.env.*
+!.env.example
+
+# Sesión de WhatsApp — contiene las llaves de la cuenta conectada
+whatsapp-auth-floreria/
+
+# Archivos subidos por usuarios (imágenes de arreglos)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
+backend/logs/
+*.log
+
+# Build
+frontend/dist/

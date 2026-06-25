@@ -5,8 +5,17 @@ const logger = require('../utils/logger');
 // Evita mensajes duplicados en el mismo día — clave: "alertId_YYYY-MM-DD"
 const enviadas = new Set();
 
+const CRTZ = { timeZone: 'America/Costa_Rica' };
+
+// Nunca usar toISOString() ni getHours() sin zona horaria aquí — son UTC en el
+// servidor (Render corre en UTC), y se desincronizan del día/hora de Costa
+// Rica justo entre las 6pm y medianoche, que es cuando más se usan estas alertas.
 function hoy() {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toLocaleDateString('en-CA', CRTZ);
+}
+
+function horaActualCR() {
+  return parseInt(new Date().toLocaleString('en-US', { ...CRTZ, hour: 'numeric', hour12: false }));
 }
 function yaEnviada(id) { return enviadas.has(`${id}_${hoy()}`); }
 function marcar(id)    { enviadas.add(`${id}_${hoy()}`); }
@@ -42,7 +51,7 @@ async function checkAlertas(force = false) {
   }
 
   const hoyStr = hoy();
-  const hora = new Date().getHours();
+  const hora = horaActualCR();
   const resumen = [];
 
   // ── 1. Insumos agotados (stock = 0) ──────────────────────────────────────────
@@ -150,7 +159,7 @@ async function enviarPrueba() {
     '',
     'Este es un mensaje de prueba del sistema de alertas de Floristería Alma Caribeña.',
     '',
-    `🕐 Enviado: ${new Date().toLocaleString('es-CR')}`
+    `🕐 Enviado: ${new Date().toLocaleString('es-CR', CRTZ)}`
   ].join('\n'));
   if (!ok) throw new Error('WhatsApp conectado pero no pudo enviar el mensaje. Intentá de nuevo.');
   return numero;

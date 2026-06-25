@@ -1,4 +1,4 @@
-const { query, queryOne, transaction } = require('../config/database');
+const { query, queryOne, transaction, addColumnIfMissing } = require('../config/database');
 const logger = require('../utils/logger');
 
 async function ensureTable() {
@@ -23,8 +23,8 @@ async function ensureTable() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`);
   // Migración: agregar columna si la tabla ya existía sin ella
-  await query(`ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS adelanto_original DECIMAL(12,2) DEFAULT NULL`).catch(() => {});
-  await query(`ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS ventas_registradas TINYINT(1) DEFAULT 0`).catch(() => {});
+  await addColumnIfMissing('pedidos', 'adelanto_original', 'DECIMAL(12,2) DEFAULT NULL');
+  await addColumnIfMissing('pedidos', 'ventas_registradas', 'TINYINT(1) DEFAULT 0');
   await query(`CREATE TABLE IF NOT EXISTS pedido_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
     pedido_id INT NOT NULL,
@@ -35,13 +35,23 @@ async function ensureTable() {
     precio_unitario DECIMAL(12,2) DEFAULT 0,
     subtotal DECIMAL(12,2) DEFAULT 0
   )`);
+  await query(`CREATE TABLE IF NOT EXISTS pedido_movimientos (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    pedido_id INT NOT NULL,
+    tipo ENUM('creacion','cambio_estado','abono') NOT NULL,
+    estado_anterior VARCHAR(20) NULL,
+    estado_nuevo VARCHAR(20) NULL,
+    monto DECIMAL(12,2) NULL,
+    descripcion VARCHAR(255) NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
 }
 
-async function generarNumero() {
-  const last = await queryOne('SELECT numero FROM pedidos ORDER BY id DESC LIMIT 1');
-  if (!last) return '0000001';
-  const n = parseInt(last.numero) + 1;
-  return String(n).padStart(7, '0');
+async function registrarMovimiento(conn, pedidoId, tipo, { estadoAnterior, estadoNuevo, monto, descripcion } = {}) {
+  await conn.query(
+    `INSERT INTO pedido_movimientos (pedido_id, tipo, estado_anterior, estado_nuevo, monto, descripcion) VALUES (?,?,?,?,?,?)`,
+    [pedidoId, tipo, estadoAnterior || null, estadoNuevo || null, monto != null ? monto : null, descripcion || null]
+  );
 }
 
 async function getPedidos(req, res) {
@@ -95,40 +105,54 @@ async function createPedido(req, res) {
 
     if (!fecha) return res.status(400).json({ success: false, message: 'La fecha es requerida' });
 
-    const numero = await generarNumero();
     const itemsSum = items.reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.precio_unitario), 0);
     const precio = req.body.precio != null ? parseFloat(req.body.precio) || itemsSum : itemsSum;
     const adelantoNum = parseFloat(adelanto) || 0;
 
-    let pedidoId;
+    let pedidoId, numero;
     await transaction(async (conn) => {
+      // El número se deriva del id autoincremental (nunca se repite, ni con
+      // borrados ni con inserciones simultáneas) en vez de "último numero + 1",
+      // que sí podía duplicarse en ambos casos.
       const [result] = await conn.query(
         `INSERT INTO pedidos (numero, fecha, cliente_nombre, cliente_telefono, hora_entrega,
           direccion, tipo_arreglo, tributo_numero, precio, adelanto,
           tipo_pago, tipo_entrega, dedicatoria, observaciones)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [numero, fecha, cliente_nombre || null, cliente_telefono || null, hora_entrega || null,
+         VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [fecha, cliente_nombre || null, cliente_telefono || null, hora_entrega || null,
          direccion || null, tipo_arreglo || null, tributo_numero || null,
          precio, adelantoNum,
          tipo_pago || 'efectivo', tipo_entrega || 'tienda',
          dedicatoria || null, observaciones || null]
       );
       pedidoId = result.insertId;
+      numero = String(pedidoId).padStart(7, '0');
+      await conn.query('UPDATE pedidos SET numero = ? WHERE id = ?', [numero, pedidoId]);
 
       await saveItems(pedidoId, items, conn);
+
+      await registrarMovimiento(conn, pedidoId, 'creacion', {
+        estadoNuevo: 'pendiente',
+        descripcion: `Pedido #${numero} creado`
+      });
 
       // Registrar adelanto como venta inmediata si hay adelanto
       if (adelantoNum > 0) {
         await conn.query(
-          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
-           VALUES (NULL, ?, ?, 0, 'pedido', ?, ?)`,
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas, forma_pago)
+           VALUES (NULL, ?, ?, 0, 'pedido', ?, ?, ?)`,
           [
             `Adelanto de pedido — ${tipo_arreglo || 'Pedido'}`,
             adelantoNum,
             cliente_nombre || null,
-            `Pedido #${numero}`
+            `Pedido #${numero}`,
+            tipo_pago || 'efectivo'
           ]
         );
+        await registrarMovimiento(conn, pedidoId, 'abono', {
+          monto: adelantoNum,
+          descripcion: `Adelanto inicial ₡${adelantoNum} (${tipo_pago || 'efectivo'})`
+        });
       }
     });
 
@@ -145,7 +169,7 @@ async function updatePedido(req, res) {
     const { id } = req.params;
     const {
       fecha, cliente_nombre, cliente_telefono, hora_entrega, direccion,
-      tipo_arreglo, tributo_numero, adelanto,
+      tipo_arreglo, tributo_numero,
       tipo_pago, tipo_entrega, dedicatoria, observaciones, estado,
       items = []
     } = req.body;
@@ -153,16 +177,19 @@ async function updatePedido(req, res) {
     const itemsSum = items.reduce((s, i) => s + parseFloat(i.cantidad) * parseFloat(i.precio_unitario), 0);
     const precio = req.body.precio != null ? parseFloat(req.body.precio) || itemsSum : itemsSum;
 
+    // El adelanto NUNCA se edita aquí — solo a través de /pedidos/:id/abono,
+    // que sí registra la venta correspondiente. Si se permitiera cambiarlo
+    // libremente desde este formulario, los abonos quedaban sin registrar.
     await transaction(async (conn) => {
       await conn.query(
         `UPDATE pedidos SET fecha=?, cliente_nombre=?, cliente_telefono=?, hora_entrega=?,
-          direccion=?, tipo_arreglo=?, tributo_numero=?, precio=?, adelanto=?,
+          direccion=?, tipo_arreglo=?, tributo_numero=?, precio=?,
           tipo_pago=?, tipo_entrega=?, dedicatoria=?, observaciones=?,
           estado=COALESCE(?,estado)
          WHERE id=?`,
         [fecha, cliente_nombre || null, cliente_telefono || null, hora_entrega || null,
          direccion || null, tipo_arreglo || null, tributo_numero || null,
-         precio, parseFloat(adelanto) || 0,
+         precio,
          tipo_pago || 'efectivo', tipo_entrega || 'tienda',
          dedicatoria || null, observaciones || null,
          estado || null, id]
@@ -259,8 +286,8 @@ async function updateEstado(req, res) {
           if (saldoPendiente > 0) {
             await conn.query(
               `INSERT INTO ventas_floreria
-                (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas)
-               VALUES (?,?,?,?,?,?,?)`,
+                (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas, forma_pago)
+               VALUES (?,?,?,?,?,?,?,?)`,
               [
                 null,
                 `Saldo pedido — ${nombreVenta}`,
@@ -268,7 +295,8 @@ async function updateEstado(req, res) {
                 costoTotal,
                 'pedido',
                 pedido.cliente_nombre || null,
-                `Pedido #${pedido.numero}`
+                `Pedido #${pedido.numero}`,
+                pedido.tipo_pago || 'efectivo'
               ]
             );
           }
@@ -285,6 +313,13 @@ async function updateEstado(req, res) {
             `UPDATE pedidos SET estado = ?, adelanto_original = COALESCE(adelanto_original, adelanto), adelanto = precio, ventas_registradas = 1 WHERE id = ?`,
             [estado, id]
           );
+
+          await registrarMovimiento(conn, id, 'cambio_estado', {
+            estadoAnterior: pedido.estado,
+            estadoNuevo: estado,
+            monto: saldoPendiente > 0 ? saldoPendiente : null,
+            descripcion: saldoPendiente > 0 ? `Entregado — saldo ₡${saldoPendiente} cobrado` : 'Entregado — sin saldo pendiente'
+          });
         });
 
         if (saldoPendiente > 0) {
@@ -328,12 +363,23 @@ async function updateEstado(req, res) {
           `UPDATE pedidos SET estado = ?, adelanto = COALESCE(adelanto_original, adelanto), adelanto_original = NULL, ventas_registradas = 0 WHERE id = ?`,
           [estado, id]
         );
+        await registrarMovimiento(conn, id, 'cambio_estado', {
+          estadoAnterior: pedido.estado,
+          estadoNuevo: estado,
+          descripcion: `Salió de entregado — ${restituciones.size} insumo(s) devueltos al inventario`
+        });
       });
 
       logger.info(`Pedido #${pedido.numero} salió de entregado — ${restituciones.size} insumo(s) devueltos al inventario`);
 
     } else {
-      await query('UPDATE pedidos SET estado = ? WHERE id = ?', [estado, id]);
+      await transaction(async (conn) => {
+        await conn.query('UPDATE pedidos SET estado = ? WHERE id = ?', [estado, id]);
+        await registrarMovimiento(conn, id, 'cambio_estado', {
+          estadoAnterior: pedido.estado,
+          estadoNuevo: estado
+        });
+      });
     }
 
     res.json({ success: true });
@@ -353,4 +399,80 @@ async function deletePedido(req, res) {
   }
 }
 
-module.exports = { getPedidos, getPedido, createPedido, updatePedido, updateEstado, deletePedido };
+// ── Registrar un abono parcial a un pedido pendiente de pago ───────────────
+async function abonarPedido(req, res) {
+  try {
+    const { id } = req.params;
+    const { monto, tipo_pago } = req.body;
+
+    const pedido = await queryOne('SELECT * FROM pedidos WHERE id = ?', [id]);
+    if (!pedido) return res.status(404).json({ success: false, message: 'Pedido no encontrado' });
+    if (pedido.estado === 'entregado' || pedido.estado === 'cancelado') {
+      return res.status(400).json({ success: false, message: `No se puede abonar a un pedido ${pedido.estado}` });
+    }
+
+    const montoNum = parseFloat(monto) || 0;
+    if (montoNum <= 0) return res.status(400).json({ success: false, message: 'El monto del abono debe ser mayor a 0' });
+
+    const saldoPendiente = (parseFloat(pedido.precio) || 0) - (parseFloat(pedido.adelanto) || 0);
+    if (montoNum > saldoPendiente + 0.5) {
+      return res.status(400).json({ success: false, message: `El abono no puede ser mayor al saldo pendiente (₡${saldoPendiente})` });
+    }
+
+    const formaPago = tipo_pago || pedido.tipo_pago || 'efectivo';
+
+    await transaction(async (conn) => {
+      await conn.query(
+        `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, precio_venta, costo_produccion, canal, nombre_cliente, notas, forma_pago)
+         VALUES (NULL, ?, ?, 0, 'pedido', ?, ?, ?)`,
+        [
+          `Abono de pedido — ${pedido.tipo_arreglo || 'Pedido'}`,
+          montoNum,
+          pedido.cliente_nombre || null,
+          `Pedido #${pedido.numero}`,
+          formaPago
+        ]
+      );
+
+      await conn.query('UPDATE pedidos SET adelanto = adelanto + ? WHERE id = ?', [montoNum, id]);
+
+      await registrarMovimiento(conn, id, 'abono', {
+        monto: montoNum,
+        descripcion: `Abono ₡${montoNum} (${formaPago})`
+      });
+    });
+
+    logger.info(`Abono ₡${montoNum} registrado para pedido #${pedido.numero} (${formaPago})`);
+    res.json({ success: true, message: 'Abono registrado correctamente' });
+  } catch (e) {
+    logger.error(`abonarPedido: ${e.message}`);
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+async function getMovimientosGlobal(req, res) {
+  try {
+    const movimientos = await query(
+      `SELECT pm.*, p.numero, p.cliente_nombre
+       FROM pedido_movimientos pm JOIN pedidos p ON pm.pedido_id = p.id
+       ORDER BY pm.fecha DESC LIMIT 300`
+    );
+    res.json({ success: true, data: movimientos });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+async function getMovimientos(req, res) {
+  try {
+    const movimientos = await query(
+      'SELECT * FROM pedido_movimientos WHERE pedido_id = ? ORDER BY fecha DESC',
+      [req.params.id]
+    );
+    res.json({ success: true, data: movimientos });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+module.exports = { ensureTable, getPedidos, getPedido, createPedido, updatePedido, updateEstado, deletePedido, abonarPedido, getMovimientos, getMovimientosGlobal };

@@ -4,6 +4,15 @@ const { query } = require('../config/database');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+// El recibo se construye con template literals e incluye texto que el usuario
+// controla (nombre de cliente, nombre de producto en "arreglo a medida") —
+// sin escapar, alguien podría inyectar HTML/JS en el correo enviado.
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 function buildReciboHTML({ cliente_nombre, items, subtotal, descuento_pct, total, numero, fecha, canal, hasLogo }) {
   const descuento = parseFloat(descuento_pct || 0);
   const descuentoMonto = subtotal * descuento / 100;
@@ -14,7 +23,7 @@ function buildReciboHTML({ cliente_nombre, items, subtotal, descuento_pct, total
     return `
     <tr>
       <td style="padding:10px 12px;border-bottom:1px solid #ffe0ec;color:#333">
-        ${i.nombre}${i.tipo === 'insumo' ? ' <span style="color:#D4006E;font-size:11px">(suelta)</span>' : ''}
+        ${escapeHtml(i.nombre)}${i.tipo === 'insumo' ? ' <span style="color:#D4006E;font-size:11px">(suelta)</span>' : ''}
       </td>
       <td style="padding:10px 12px;border-bottom:1px solid #ffe0ec;text-align:center;color:#555">${i.cantidad}</td>
       <td style="padding:10px 12px;border-bottom:1px solid #ffe0ec;text-align:right;color:#555">₡${Number(precio).toLocaleString('es-CR')}</td>
@@ -44,12 +53,12 @@ function buildReciboHTML({ cliente_nombre, items, subtotal, descuento_pct, total
         <tr>
           <td>
             <p style="margin:0;font-size:11px;color:#D4006E;font-weight:700;text-transform:uppercase;letter-spacing:1px">Recibo de compra</p>
-            <p style="margin:4px 0 0;font-size:20px;font-weight:700;color:#8B0040">${numero}</p>
+            <p style="margin:4px 0 0;font-size:20px;font-weight:700;color:#8B0040">${escapeHtml(numero)}</p>
           </td>
           <td style="text-align:right">
             <p style="margin:0;font-size:11px;color:#6b7280">Fecha</p>
-            <p style="margin:4px 0 0;font-size:13px;font-weight:600;color:#1A8A7A">${fecha}</p>
-            ${canal ? `<p style="margin:4px 0 0;font-size:11px;color:#9ca3af;text-transform:capitalize">${canal}</p>` : ''}
+            <p style="margin:4px 0 0;font-size:13px;font-weight:600;color:#1A8A7A">${escapeHtml(fecha)}</p>
+            ${canal ? `<p style="margin:4px 0 0;font-size:11px;color:#9ca3af;text-transform:capitalize">${escapeHtml(canal)}</p>` : ''}
           </td>
         </tr>
       </table>
@@ -58,7 +67,7 @@ function buildReciboHTML({ cliente_nombre, items, subtotal, descuento_pct, total
     <!-- Cliente -->
     <div style="padding:22px 36px;border-bottom:1px solid #f3f4f6">
       <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px">Cliente</p>
-      <p style="margin:0;font-size:16px;font-weight:700;color:#111">${cliente_nombre}</p>
+      <p style="margin:0;font-size:16px;font-weight:700;color:#111">${escapeHtml(cliente_nombre)}</p>
     </div>
 
     <!-- Tabla items -->
@@ -131,16 +140,16 @@ async function enviarRecibo(req, res) {
 
 async function registrarVentaManual(req, res) {
   try {
-    const { concepto, monto, fecha, canal, nombre_cliente } = req.body;
+    const { concepto, monto, fecha, canal, nombre_cliente, forma_pago } = req.body;
     if (!monto || !fecha) return res.status(400).json({ success: false, message: 'Monto y fecha son requeridos' });
     if (isNaN(parseFloat(monto)) || parseFloat(monto) <= 0) return res.status(400).json({ success: false, message: 'Monto inválido' });
 
     // Guardar como mediodía UTC para que CONVERT_TZ a CR (-6h) quede en la fecha correcta
     const fechaUTC = `${fecha} 12:00:00`;
     const result = await query(
-      `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, fecha)
-       VALUES (NULL, ?, ?, ?, 0, ?, ?)`,
-      [concepto || 'Venta general', canal || 'mostrador', parseFloat(monto), nombre_cliente || null, fechaUTC]
+      `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, fecha, forma_pago)
+       VALUES (NULL, ?, ?, ?, 0, ?, ?, ?)`,
+      [concepto || 'Venta general', canal || 'mostrador', parseFloat(monto), nombre_cliente || null, fechaUTC, forma_pago || 'efectivo']
     );
 
     logger.info(`Venta manual registrada: ${concepto || 'Venta general'} ₡${monto} el ${fecha}`);

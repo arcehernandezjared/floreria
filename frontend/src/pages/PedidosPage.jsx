@@ -2,7 +2,8 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Printer, Edit, Trash2, X, Clock, Package,
-  CheckCircle, XCircle, Search, ChevronDown, Flower2
+  CheckCircle, XCircle, Search, ChevronDown, Flower2,
+  Wallet, History, Banknote, CreditCard, Smartphone, PlusCircle
 } from 'lucide-react';
 import api, { formatMoney, hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
@@ -15,6 +16,18 @@ const ESTADO = {
   listo:     { label: 'Listo',      cls: 'badge-blue',   Icon: Package },
   entregado: { label: 'Entregado',  cls: 'badge-green',  Icon: CheckCircle },
   cancelado: { label: 'Cancelado',  cls: 'badge-red',    Icon: XCircle },
+};
+
+const FORMAS_PAGO = [
+  { value: 'efectivo', label: 'Efectivo', Icon: Banknote },
+  { value: 'tarjeta',  label: 'Tarjeta',  Icon: CreditCard },
+  { value: 'sinpe',    label: 'Sinpe',    Icon: Smartphone },
+];
+
+const TIPO_MOVIMIENTO = {
+  creacion:       { label: 'Pedido creado',  Icon: PlusCircle, color: 'text-brand-400' },
+  cambio_estado:  { label: 'Cambio de estado', Icon: History,  color: 'text-sky-400' },
+  abono:          { label: 'Abono registrado', Icon: Wallet,   color: 'text-emerald-400' },
 };
 
 // ── PDF idéntico al facturero físico ──────────────────────────────────────────
@@ -506,9 +519,16 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
               </div>
               <div>
                 <label className="label">Adelanto ₡</label>
-                <input type="number" min="0" step="1" inputMode="numeric" className="input"
-                  placeholder="0" value={form.adelanto}
-                  onChange={e => set('adelanto', e.target.value)} />
+                {pedido ? (
+                  <>
+                    <div className="input font-semibold text-gray-400 tabular-nums">{formatMoney(form.adelanto)}</div>
+                    <p className="text-[11px] text-gray-600 mt-1">Usa el botón "Abonar" para registrar pagos adicionales</p>
+                  </>
+                ) : (
+                  <input type="number" min="0" step="1" inputMode="numeric" className="input"
+                    placeholder="0" value={form.adelanto}
+                    onChange={e => set('adelanto', e.target.value)} />
+                )}
               </div>
               <div>
                 <label className="label">Saldo ₡</label>
@@ -573,10 +593,152 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
   );
 }
 
+// ── Modal: abonar saldo pendiente ──────────────────────────────────────────────
+function AbonoModal({ pedido, onClose, onConfirm, isPending }) {
+  const saldo = (parseFloat(pedido.precio) || 0) - (parseFloat(pedido.adelanto) || 0);
+  const [monto, setMonto] = useState(String(saldo));
+  const [formaPago, setFormaPago] = useState(pedido.tipo_pago || 'efectivo');
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="card w-full max-w-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-bold text-lg">Abonar pedido #{pedido.numero}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">
+          Saldo pendiente: <span className="text-yellow-400 font-bold">{formatMoney(saldo)}</span>
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="label">Monto a abonar (₡)</label>
+            <input type="number" min="0" step="100" className="input font-bold text-brand-400"
+              value={monto} onChange={e => setMonto(e.target.value)} />
+          </div>
+          <div>
+            <label className="label mb-2 block">Forma de pago</label>
+            <div className="flex gap-2">
+              {FORMAS_PAGO.map(({ value, label, Icon }) => (
+                <button key={value} type="button" onClick={() => setFormaPago(value)}
+                  className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-sm font-medium border transition-all ${
+                    formaPago === value ? 'bg-brand-600/20 border-brand-600/40 text-brand-400' : 'border-gray-700 text-gray-400 hover:border-gray-600'
+                  }`}>
+                  <Icon size={14} /> {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 pt-5">
+          <button onClick={onClose} className="btn-secondary flex-1 text-sm">Cancelar</button>
+          <button onClick={() => onConfirm({ monto: parseFloat(monto) || 0, tipo_pago: formaPago })}
+            disabled={isPending} className="btn-primary flex-1 text-sm">
+            {isPending ? 'Registrando...' : 'Confirmar abono'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ── Modal: historial de movimientos del pedido ─────────────────────────────────
+function MovimientosModal({ pedido, onClose }) {
+  const { data: movimientos = [], isLoading } = useQuery({
+    queryKey: ['pedido-movimientos', pedido.id],
+    queryFn: () => api.get(`/pedidos/${pedido.id}/movimientos`).then(r => r.data.data),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="card w-full max-w-md" style={{ maxHeight: '80vh' }}>
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <h3 className="text-white font-bold text-lg">Movimientos · #{pedido.numero}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="overflow-y-auto space-y-2" style={{ maxHeight: '60vh' }}>
+          {isLoading ? (
+            <p className="text-gray-600 text-sm text-center py-6">Cargando...</p>
+          ) : movimientos.length === 0 ? (
+            <p className="text-gray-600 text-sm text-center py-6">Sin movimientos registrados</p>
+          ) : movimientos.map(m => {
+            const cfg = TIPO_MOVIMIENTO[m.tipo] || TIPO_MOVIMIENTO.cambio_estado;
+            const fecha = new Date(m.fecha).toLocaleString('es-CR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Costa_Rica' });
+            return (
+              <div key={m.id} className="flex items-start gap-3 bg-gray-800/50 rounded-xl px-3 py-2.5">
+                <cfg.Icon size={16} className={`mt-0.5 flex-shrink-0 ${cfg.color}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium">
+                    {m.tipo === 'cambio_estado' && m.estado_anterior && m.estado_nuevo
+                      ? `${ESTADO[m.estado_anterior]?.label || m.estado_anterior} → ${ESTADO[m.estado_nuevo]?.label || m.estado_nuevo}`
+                      : cfg.label}
+                  </p>
+                  {m.descripcion && <p className="text-xs text-gray-400 mt-0.5">{m.descripcion}</p>}
+                  <p className="text-xs text-gray-600 mt-0.5">{fecha}</p>
+                </div>
+                {m.monto != null && <span className="text-sm font-bold text-emerald-400 tabular-nums flex-shrink-0">{formatMoney(m.monto)}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ── Modal: historial de movimientos de TODOS los pedidos ──────────────────────
+function MovimientosGlobalModal({ onClose }) {
+  const { data: movimientos = [], isLoading } = useQuery({
+    queryKey: ['pedido-movimientos-global'],
+    queryFn: () => api.get('/pedidos/movimientos').then(r => r.data.data),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="card w-full max-w-lg" style={{ maxHeight: '80vh' }}>
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <h3 className="text-white font-bold text-lg">Movimientos de pedidos</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="overflow-y-auto space-y-2" style={{ maxHeight: '65vh' }}>
+          {isLoading ? (
+            <p className="text-gray-600 text-sm text-center py-6">Cargando...</p>
+          ) : movimientos.length === 0 ? (
+            <p className="text-gray-600 text-sm text-center py-6">Sin movimientos registrados</p>
+          ) : movimientos.map(m => {
+            const cfg = TIPO_MOVIMIENTO[m.tipo] || TIPO_MOVIMIENTO.cambio_estado;
+            const fecha = new Date(m.fecha).toLocaleString('es-CR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Costa_Rica' });
+            return (
+              <div key={m.id} className="flex items-start gap-3 bg-gray-800/50 rounded-xl px-3 py-2.5">
+                <cfg.Icon size={16} className={`mt-0.5 flex-shrink-0 ${cfg.color}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium">
+                    #{m.numero} · {m.cliente_nombre || '(sin nombre)'}
+                  </p>
+                  <p className="text-xs text-gray-300 mt-0.5">
+                    {m.tipo === 'cambio_estado' && m.estado_anterior && m.estado_nuevo
+                      ? `${ESTADO[m.estado_anterior]?.label || m.estado_anterior} → ${ESTADO[m.estado_nuevo]?.label || m.estado_nuevo}`
+                      : cfg.label}
+                  </p>
+                  {m.descripcion && <p className="text-xs text-gray-400 mt-0.5">{m.descripcion}</p>}
+                  <p className="text-xs text-gray-600 mt-0.5">{fecha}</p>
+                </div>
+                {m.monto != null && <span className="text-sm font-bold text-emerald-400 tabular-nums flex-shrink-0">{formatMoney(m.monto)}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // ── Tarjeta de pedido ─────────────────────────────────────────────────────────
-function PedidoCard({ p, onEdit, onDelete, onEstado }) {
+function PedidoCard({ p, onEdit, onDelete, onEstado, onAbonar, onMovimientos }) {
   const cfg = ESTADO[p.estado] || ESTADO.pendiente;
   const saldo = (parseFloat(p.precio) || 0) - (parseFloat(p.adelanto) || 0);
+  const puedeAbonar = saldo > 0 && p.estado !== 'entregado' && p.estado !== 'cancelado';
   const [showEstado, setShowEstado] = useState(false);
 
   const fecha = p.fecha
@@ -645,30 +807,36 @@ function PedidoCard({ p, onEdit, onDelete, onEstado }) {
         </span>
       </div>
 
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <button onClick={() => setShowEstado(v => !v)}
-            className="btn-secondary w-full justify-center text-xs py-1.5 gap-1">
-            <cfg.Icon size={13} />{cfg.label}<ChevronDown size={11} />
-          </button>
-          <AnimatePresence>
-            {showEstado && (
-              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="absolute bottom-full mb-1 left-0 w-full bg-gray-800 border border-gray-700 rounded-xl overflow-hidden z-10 shadow-xl">
-                {Object.entries(ESTADO).map(([key, c]) => (
-                  <button key={key} onClick={() => { onEstado(p.id, key); setShowEstado(false); }}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition-colors flex items-center gap-2 ${p.estado === key ? 'text-brand-400' : 'text-gray-300'}`}>
-                    <c.Icon size={12} /> {c.label}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        <button onClick={() => imprimirPedido(p)} className="btn-secondary px-3 py-1.5" title="Imprimir"><Printer size={14} /></button>
-        <button onClick={() => onEdit(p)} className="btn-secondary px-3 py-1.5" title="Editar"><Edit size={14} /></button>
-        <button onClick={() => onDelete(p)} className="btn-danger px-3 py-1.5" title="Eliminar"><Trash2 size={14} /></button>
+      <div className="relative mb-2">
+        <button onClick={() => setShowEstado(v => !v)}
+          className="btn-secondary w-full justify-center text-xs py-1.5 gap-1">
+          <cfg.Icon size={13} />{cfg.label}<ChevronDown size={11} />
+        </button>
+        <AnimatePresence>
+          {showEstado && (
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="absolute bottom-full mb-1 left-0 w-full bg-gray-800 border border-gray-700 rounded-xl overflow-hidden z-10 shadow-xl">
+              {Object.entries(ESTADO).map(([key, c]) => (
+                <button key={key} onClick={() => { onEstado(p.id, key); setShowEstado(false); }}
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition-colors flex items-center gap-2 ${p.estado === key ? 'text-brand-400' : 'text-gray-300'}`}>
+                  <c.Icon size={12} /> {c.label}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
+      <div className="flex gap-1.5">
+        <button onClick={() => imprimirPedido(p)} className="btn-secondary flex-1 justify-center px-0 py-1.5" title="Imprimir"><Printer size={14} /></button>
+        <button onClick={() => onMovimientos(p)} className="btn-secondary flex-1 justify-center px-0 py-1.5" title="Movimientos"><History size={14} /></button>
+        <button onClick={() => onEdit(p)} className="btn-secondary flex-1 justify-center px-0 py-1.5" title="Editar"><Edit size={14} /></button>
+        <button onClick={() => onDelete(p)} className="btn-danger flex-1 justify-center px-0 py-1.5" title="Eliminar"><Trash2 size={14} /></button>
+      </div>
+      {puedeAbonar && (
+        <button onClick={() => onAbonar(p)} className="btn-primary w-full justify-center text-xs py-1.5 gap-1 mt-2">
+          <Wallet size={13} /> Abonar saldo
+        </button>
+      )}
     </motion.div>
   );
 }
@@ -680,6 +848,9 @@ export default function PedidosPage() {
   const [confirmar, setConfirmar] = useState(null);
   const [busqueda, setBusqueda]   = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [abonando, setAbonando]   = useState(null);
+  const [verMovimientos, setVerMovimientos] = useState(null);
+  const [verMovimientosGlobal, setVerMovimientosGlobal] = useState(false);
 
   const { data: pedidos = [] } = useQuery({
     queryKey: ['pedidos'],
@@ -711,13 +882,30 @@ export default function PedidosPage() {
 
   const estadoMut = useMutation({
     mutationFn: ({ id, estado }) => api.patch(`/pedidos/${id}/estado`, { estado }),
-    onSuccess: () => { qc.invalidateQueries(['pedidos']); qc.invalidateQueries(['dashboard']); },
+    onSuccess: (_res, { estado }) => {
+      qc.invalidateQueries(['pedidos']);
+      qc.invalidateQueries(['dashboard']);
+      toast.success(`Pedido marcado como ${ESTADO[estado]?.label || estado}`);
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al cambiar el estado'),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id) => api.delete(`/pedidos/${id}`),
     onSuccess: () => { qc.invalidateQueries(['pedidos']); qc.invalidateQueries(['dashboard']); toast.success('Pedido eliminado'); setConfirmar(null); },
     onError: (e) => toast.error(e.response?.data?.message || 'Error'),
+  });
+
+  const abonoMut = useMutation({
+    mutationFn: ({ id, ...data }) => api.post(`/pedidos/${id}/abono`, data),
+    onSuccess: () => {
+      qc.invalidateQueries(['pedidos']);
+      qc.invalidateQueries(['dashboard']);
+      qc.invalidateQueries(['pedido-movimientos', abonando?.id]);
+      toast.success('Abono registrado');
+      setAbonando(null);
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al registrar abono'),
   });
 
   const handleSave = (data) => {
@@ -748,9 +936,14 @@ export default function PedidosPage() {
           <h1 className="text-2xl font-bold text-white">Pedidos</h1>
           <p className="text-gray-500 text-sm mt-0.5">Órdenes de pedido de clientes</p>
         </div>
-        <button onClick={() => { setEditandoConItems(null); setModal('nuevo'); }} className="btn-primary">
-          <Plus size={16} /> Nuevo Pedido
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setVerMovimientosGlobal(true)} className="btn-secondary">
+            <History size={16} /> Movimientos
+          </button>
+          <button onClick={() => { setEditandoConItems(null); setModal('nuevo'); }} className="btn-primary">
+            <Plus size={16} /> Nuevo Pedido
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
@@ -784,10 +977,29 @@ export default function PedidosPage() {
               onEdit={abrirEditar}
               onDelete={setConfirmar}
               onEstado={(id, estado) => estadoMut.mutate({ id, estado })}
+              onAbonar={setAbonando}
+              onMovimientos={setVerMovimientos}
             />
           ))}
         </div>
       )}
+
+      <AnimatePresence>
+        {abonando && (
+          <AbonoModal
+            pedido={abonando}
+            onClose={() => setAbonando(null)}
+            onConfirm={(data) => abonoMut.mutate({ id: abonando.id, ...data })}
+            isPending={abonoMut.isPending}
+          />
+        )}
+        {verMovimientos && (
+          <MovimientosModal pedido={verMovimientos} onClose={() => setVerMovimientos(null)} />
+        )}
+        {verMovimientosGlobal && (
+          <MovimientosGlobalModal onClose={() => setVerMovimientosGlobal(false)} />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {(modal === 'nuevo' || modal === 'editar') && (

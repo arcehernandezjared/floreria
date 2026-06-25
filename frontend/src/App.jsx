@@ -17,7 +17,7 @@ import WhatsAppPage from './pages/WhatsAppPage';
 import ReportesPage from './pages/ReportesPage';
 import CotizacionesPage from './pages/CotizacionesPage';
 import PedidosPage from './pages/PedidosPage';
-import CierrePage from './pages/CierrePage';
+import CajaPage from './pages/CajaPage';
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
@@ -55,7 +55,7 @@ export default function App() {
           <Route path="reportes" element={<ReportesPage />} />
           <Route path="cotizaciones" element={<CotizacionesPage />} />
           <Route path="pedidos" element={<PedidosPage />} />
-          <Route path="cierre" element={<CierrePage />} />
+          <Route path="caja" element={<CajaPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -59,9 +59,11 @@ async function getDashboard(req, res) {
       const acumulado = parseFloat(nomResult.acumulado);
       const meta = parseFloat(config.meta_quincena);
       const pct = meta > 0 ? Math.min(100, (acumulado / meta) * 100) : 0;
-      const hoyDate = new Date();
-      const diaActual = hoyDate.getDate();
-      const daysInMonth = new Date(hoyDate.getFullYear(), hoyDate.getMonth() + 1, 0).getDate();
+      // Derivado de hoyCR (ya calculado arriba para CR) — nunca de new Date()
+      // directamente, que en el servidor corre en UTC y se desincroniza con
+      // el día calendario de Costa Rica entre las 6pm y medianoche.
+      const diaActual = dia;
+      const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
       const finQuincena = diaActual <= 15 ? 15 : daysInMonth;
       const diasRestantes = Math.max(0, finQuincena - diaActual);
       const faltante = Math.max(0, meta - acumulado);
