@@ -93,6 +93,7 @@ async function start() {
   await require('./src/controllers/catalogoController').ensureCodigo();
   await require('./src/controllers/catalogoController').ensureCanalPedido();
   await require('./src/controllers/catalogoController').ensureFormaPago();
+  await require('./src/controllers/catalogoController').ensurePagoMixto();
   await require('./src/controllers/insumoController').ensureCodigoInsumos();
   await require('./src/controllers/cierresController').ensureTable();
   await require('./src/controllers/cajaController').ensureTable();

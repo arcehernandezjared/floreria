@@ -34,6 +34,32 @@ async function ensureFormaPago() {
   } catch (_) {}
 }
 
+// Permite dividir el pago de una venta entre varios métodos (ej: mitad
+// efectivo, mitad tarjeta). 'mixto' marca las filas que pertenecen a una
+// venta dividida; el desglose real vive en pagos_venta, agrupado por venta_grupo.
+async function ensurePagoMixto() {
+  try {
+    await query(`ALTER TABLE ventas_floreria MODIFY COLUMN forma_pago ENUM('efectivo','tarjeta','sinpe','mixto') NOT NULL DEFAULT 'efectivo'`);
+  } catch (e) {
+    logger.warn(`ensurePagoMixto (forma_pago): ${e.message}`);
+  }
+  try {
+    await query(`ALTER TABLE ventas_floreria ADD COLUMN venta_grupo VARCHAR(40) NULL`);
+  } catch (_) {}
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS pagos_venta (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      venta_grupo VARCHAR(40) NOT NULL,
+      metodo ENUM('efectivo','tarjeta','sinpe') NOT NULL,
+      monto DECIMAL(10,2) NOT NULL,
+      fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX (venta_grupo)
+    )`);
+  } catch (e) {
+    logger.warn(`ensurePagoMixto (pagos_venta): ${e.message}`);
+  }
+}
+
 // Agrega 'pedido' como canal válido — ventas generadas por adelanto/saldo de pedidos
 async function ensureCanalPedido() {
   try {
@@ -413,7 +439,7 @@ async function registrarVentaPOS(req, res) {
   try {
     const {
       catalogo_items = [], insumo_items = [], mano_de_obra = 0,
-      nombre_cliente, canal, descuento, forma_pago
+      nombre_cliente, canal, descuento, forma_pago, pagos
     } = req.body;
 
     if (catalogo_items.length === 0 && insumo_items.length === 0 && parseFloat(mano_de_obra) <= 0) {
@@ -459,6 +485,44 @@ async function registrarVentaPOS(req, res) {
       return res.status(400).json({ success: false, message: `Stock insuficiente para: ${sinStock.map(s => s.nombre).join(', ')}` });
     }
 
+    // ── Pago dividido entre varios métodos (ej: mitad efectivo, mitad tarjeta) ─
+    // Si no llega "pagos" se usa forma_pago como un único método (compatibilidad).
+    const METODOS_VALIDOS = ['efectivo', 'tarjeta', 'sinpe'];
+    let totalEsperado = 0;
+    for (const item of catalogo_items) {
+      const arreglo = arreglosMap[item.catalogo_id];
+      const cant = parseInt(item.cantidad) || 1;
+      const precioFinal = parseFloat(item.precio_venta || arreglo.precio_venta) * (1 - descPct / 100);
+      totalEsperado += precioFinal * cant;
+    }
+    for (const item of insumo_items) {
+      const cantidad = parseFloat(item.cantidad);
+      const precioConDesc = parseFloat(item.precio_unitario) * (1 - descPct / 100);
+      totalEsperado += precioConDesc * cantidad;
+    }
+    totalEsperado += parseFloat(mano_de_obra) || 0;
+
+    const pagosArr = Array.isArray(pagos) && pagos.length > 0
+      ? pagos
+      : [{ metodo: forma_pago || 'efectivo', monto: totalEsperado }];
+
+    for (const p of pagosArr) {
+      if (!METODOS_VALIDOS.includes(p.metodo)) {
+        return res.status(400).json({ success: false, message: `Método de pago inválido: ${p.metodo}` });
+      }
+    }
+    const sumaPagos = pagosArr.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+    if (Math.abs(sumaPagos - totalEsperado) > 1) {
+      return res.status(400).json({
+        success: false,
+        message: `Los pagos (₡${sumaPagos.toFixed(0)}) no cubren el total de la venta (₡${totalEsperado.toFixed(0)})`
+      });
+    }
+
+    const esDividido = pagosArr.length > 1;
+    const formaPagoFinal = esDividido ? 'mixto' : pagosArr[0].metodo;
+    const ventaGrupo = esDividido ? `VG${Date.now()}${Math.random().toString(36).slice(2, 8)}` : null;
+
     // ── Todo o nada: una sola transacción para el carrito completo ───────────
     await transaction(async (conn) => {
       // Arreglos del catálogo
@@ -470,9 +534,9 @@ async function registrarVentaPOS(req, res) {
 
         for (let n = 0; n < cant; n++) {
           await conn.query(
-            `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, notas, forma_pago)
-             VALUES (?,?,?,?,?,?,?,?)`,
-            [arreglo.id, arreglo.nombre, canal || 'mostrador', precioFinal, costo, nombre_cliente || null, item.notas || null, forma_pago || 'efectivo']
+            `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, notas, forma_pago, venta_grupo)
+             VALUES (?,?,?,?,?,?,?,?,?)`,
+            [arreglo.id, arreglo.nombre, canal || 'mostrador', precioFinal, costo, nombre_cliente || null, item.notas || null, formaPagoFinal, ventaGrupo]
           );
         }
 
@@ -512,12 +576,12 @@ async function registrarVentaPOS(req, res) {
         const costoTotal = parseFloat(insumo.costo_unitario) * cantidad;
 
         await conn.query(
-          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, insumo_id, cantidad_insumo, forma_pago)
-           VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, insumo_id, cantidad_insumo, forma_pago, venta_grupo)
+           VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             `${insumo.nombre} \xD7${fmtCantidadPOS(cantidad)} ${insumo.unidad}`,
             canal || 'mostrador', precioTotal, costoTotal,
-            nombre_cliente || 'Cliente mostrador', item.insumo_id, cantidad, forma_pago || 'efectivo'
+            nombre_cliente || 'Cliente mostrador', item.insumo_id, cantidad, formaPagoFinal, ventaGrupo
           ]
         );
       }
@@ -527,10 +591,20 @@ async function registrarVentaPOS(req, res) {
       const manoNum = parseFloat(mano_de_obra) || 0;
       if (manoNum > 0) {
         await conn.query(
-          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, forma_pago)
-           VALUES (NULL, 'Mano de obra', ?, ?, 0, ?, ?)`,
-          [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador', forma_pago || 'efectivo']
+          `INSERT INTO ventas_floreria (catalogo_id, nombre_arreglo, canal, precio_venta, costo_produccion, nombre_cliente, forma_pago, venta_grupo)
+           VALUES (NULL, 'Mano de obra', ?, ?, 0, ?, ?, ?)`,
+          [canal || 'mostrador', manoNum, nombre_cliente || 'Cliente mostrador', formaPagoFinal, ventaGrupo]
         );
+      }
+
+      // Pago dividido: guarda el desglose real por método para esta venta
+      if (esDividido) {
+        for (const p of pagosArr) {
+          await conn.query(
+            `INSERT INTO pagos_venta (venta_grupo, metodo, monto) VALUES (?,?,?)`,
+            [ventaGrupo, p.metodo, parseFloat(p.monto) || 0]
+          );
+        }
       }
     });
 
@@ -597,7 +671,13 @@ async function getVentaDetalle(req, res) {
       }
     }
 
-    res.json({ success: true, data: { ...venta, ingredientes, pedido } });
+    // Si el pago se dividió entre varios métodos, traer el desglose real
+    let pagos = [];
+    if (venta.forma_pago === 'mixto' && venta.venta_grupo) {
+      pagos = await query('SELECT metodo, monto FROM pagos_venta WHERE venta_grupo = ?', [venta.venta_grupo]);
+    }
+
+    res.json({ success: true, data: { ...venta, ingredientes, pedido, pagos } });
   } catch (error) {
     logger.error(`getVentaDetalle: ${error.message}`);
     res.status(500).json({ success: false, message: error.message });
@@ -741,4 +821,4 @@ async function importarDesdePhp(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
+module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, ensurePagoMixto, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };

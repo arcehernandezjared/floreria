@@ -27,15 +27,32 @@ async function ensureTable() {
 }
 
 // ── Ventas del día agrupadas por forma de pago ──────────────────────────────
+// Las ventas con pago dividido (forma_pago = 'mixto') no suman directo aquí:
+// su desglose real vive en pagos_venta, agrupado por venta_grupo.
 async function getDesglosePago(fecha) {
   const filas = await query(
     `SELECT forma_pago, COALESCE(SUM(precio_venta), 0) as total
-     FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?
+     FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ? AND forma_pago != 'mixto'
      GROUP BY forma_pago`,
     [fecha]
   );
   const desglose = { efectivo: 0, tarjeta: 0, sinpe: 0 };
   for (const f of filas) desglose[f.forma_pago] = parseFloat(f.total);
+
+  const grupos = await query(
+    `SELECT DISTINCT venta_grupo FROM ventas_floreria
+     WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ? AND forma_pago = 'mixto' AND venta_grupo IS NOT NULL`,
+    [fecha]
+  );
+  if (grupos.length > 0) {
+    const ids = grupos.map(g => g.venta_grupo);
+    const pagosMixtos = await query(
+      `SELECT metodo, COALESCE(SUM(monto), 0) as total FROM pagos_venta WHERE venta_grupo IN (?) GROUP BY metodo`,
+      [ids]
+    );
+    for (const p of pagosMixtos) desglose[p.metodo] += parseFloat(p.total);
+  }
+
   return desglose;
 }
 

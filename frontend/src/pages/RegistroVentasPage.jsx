@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, ShoppingBag, Filter,
   MessageSquare, ShoppingCart, Store, Printer, Mail, X, Send, Plus, RotateCcw, Eye,
-  Flower2, Package, MapPin, Calendar, Banknote, CreditCard, Smartphone
+  Flower2, Package, MapPin, Calendar, Banknote, CreditCard, Smartphone, Wallet
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import api, { hoyCR } from '../utils/api';
@@ -20,6 +20,7 @@ const FORMA_PAGO_LABELS = {
   efectivo: { label: 'Efectivo', icon: Banknote,    color: 'text-emerald-400 bg-emerald-500/10' },
   tarjeta:  { label: 'Tarjeta',  icon: CreditCard,  color: 'text-sky-400 bg-sky-500/10' },
   sinpe:    { label: 'Sinpe',    icon: Smartphone,  color: 'text-purple-400 bg-purple-500/10' },
+  mixto:    { label: 'Dividido', icon: Wallet,      color: 'text-amber-400 bg-amber-500/10' },
 };
 
 function hoy()      { return hoyCR(); }
@@ -319,6 +320,26 @@ function ModalDetalleVenta({ ventaId, onClose }) {
                 </span>
               </div>
             </div>
+
+            {detalle.forma_pago === 'mixto' && detalle.pagos?.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1.5">Desglose del pago dividido</p>
+                <div className="space-y-1 bg-gray-800/40 rounded-xl p-3">
+                  {detalle.pagos.map((p, i) => {
+                    const info = FORMA_PAGO_LABELS[p.metodo] || { label: p.metodo };
+                    const Icon = info.icon;
+                    return (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1.5 text-gray-300">
+                          {Icon && <Icon size={12} className="text-gray-500" />}{info.label}
+                        </span>
+                        <span className="text-white font-medium">₡{parseFloat(p.monto).toLocaleString('es-CR')}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div>
               <p className="text-xs text-gray-500 mb-1">Concepto</p>

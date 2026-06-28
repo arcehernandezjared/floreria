@@ -49,7 +49,7 @@ function fmtQty(n) {
 }
 
 function generarReciboPOS(snap) {
-  const { numero, items, cliente, canal, descuento, subtotalProductos, manoDeObra, subtotal, descuentoMonto, total, fecha } = snap;
+  const { numero, items, cliente, canal, descuento, subtotalProductos, manoDeObra, subtotal, descuentoMonto, total, pagos, fecha } = snap;
   const canalLabel = (CANALES.find(c => c.value === canal)?.label || canal || '').toUpperCase();
 
   // Formato ticket térmico 80mm — monocromo, monoespaciado, estilo punto de venta
@@ -145,6 +145,17 @@ function generarReciboPOS(snap) {
   doc.setFontSize(12);
   doc.text('TOTAL', M, y);
   doc.text(fmtCRC(total), R, y, { align: 'right' }); y += 5.5;
+
+  if (pagos && pagos.length > 0) {
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(7.5);
+    const FORMAS_LABEL = { efectivo: 'EFECTIVO', tarjeta: 'TARJETA', sinpe: 'SINPE' };
+    pagos.forEach(p => {
+      doc.text(`PAGO ${FORMAS_LABEL[p.metodo] || p.metodo.toUpperCase()}`, M, y);
+      doc.text(fmtCRC(p.monto), R, y, { align: 'right' }); y += 4;
+    });
+    y += 1.5;
+  }
 
   dashed();
 
@@ -423,6 +434,8 @@ export default function PuntoVentaPage() {
   const [emailCliente, setEmailCliente] = useState('');
   const [canal, setCanal]           = useState('mostrador');
   const [formaPago, setFormaPago]   = useState('efectivo');
+  const [dividirPago, setDividirPago] = useState(false);
+  const [pagosSplit, setPagosSplit] = useState([{ metodo: 'efectivo', monto: '' }, { metodo: 'tarjeta', monto: '' }]);
   const [descuento, setDescuento]   = useState(0);
   const [montoApertura, setMontoApertura] = useState('');
   const [modalAbono, setModalAbono] = useState(null);
@@ -503,6 +516,19 @@ export default function PuntoVentaPage() {
   const descuentoMonto = subtotal * (descuento / 100);
   const total = subtotal - descuentoMonto;
 
+  // ── Pago dividido entre varios métodos ──────────────────────────────────
+  const sumaPagosSplit = pagosSplit.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+  const restantePago = total - sumaPagosSplit;
+
+  const actualizarPago = (idx, field, value) =>
+    setPagosSplit(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+  const agregarLineaPago = () => {
+    const usados = pagosSplit.map(p => p.metodo);
+    const libre = FORMAS_PAGO.find(f => !usados.includes(f.value))?.value || 'efectivo';
+    setPagosSplit(prev => [...prev, { metodo: libre, monto: '' }]);
+  };
+  const quitarLineaPago = (idx) => setPagosSplit(prev => prev.filter((_, i) => i !== idx));
+
   // ── Venta personalizada mutation ──────────────────────────────────────
   const ventaPersonalizadaMut = useMutation({
     mutationFn: (data) => api.post('/catalogo/venta-personalizada', { ...data, canal, forma_pago: formaPago }),
@@ -521,6 +547,10 @@ export default function PuntoVentaPage() {
       const catalogoItems = carrito.filter(i => i.tipo === 'catalogo');
       const insumoItems   = carrito.filter(i => i.tipo === 'insumo');
       const fechaCR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+
+      const pagos = dividirPago
+        ? pagosSplit.filter(p => parseFloat(p.monto) > 0).map(p => ({ metodo: p.metodo, monto: parseFloat(p.monto) }))
+        : [{ metodo: formaPago, monto: total }];
 
       // Todo el carrito en UNA sola petición — el backend lo registra en una
       // sola transacción (todo o nada). Evita que si una parte falla por stock
@@ -541,11 +571,15 @@ export default function PuntoVentaPage() {
         nombre_cliente: cliente || 'Cliente mostrador',
         canal,
         forma_pago: formaPago,
+        pagos,
         descuento,
         fecha: fechaCR,
       });
     },
     onSuccess: () => {
+      const pagos = dividirPago
+        ? pagosSplit.filter(p => parseFloat(p.monto) > 0).map(p => ({ metodo: p.metodo, monto: parseFloat(p.monto) }))
+        : [{ metodo: formaPago, monto: total }];
       const snap = {
         numero: `VTA-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
         items: carrito.map(i => ({ ...i })),
@@ -558,6 +592,7 @@ export default function PuntoVentaPage() {
         subtotal,
         descuentoMonto,
         total,
+        pagos,
         fecha: new Date().toLocaleString('es-CR'),
       };
       setVentaSnapshot(snap);
@@ -577,6 +612,8 @@ export default function PuntoVentaPage() {
     setEmailCliente('');
     setDescuento(0);
     setFormaPago('efectivo');
+    setDividirPago(false);
+    setPagosSplit([{ metodo: 'efectivo', monto: '' }, { metodo: 'tarjeta', monto: '' }]);
     toast.success('Venta registrada');
   };
 
@@ -1054,16 +1091,57 @@ export default function PuntoVentaPage() {
                     {CANALES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
-                <div className="flex gap-1.5">
-                  {FORMAS_PAGO.map(({ value, label, Icon }) => (
-                    <button key={value} type="button" onClick={() => setFormaPago(value)}
-                      className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                        formaPago === value ? 'bg-brand-600/20 border-brand-600/40 text-brand-400' : 'border-gray-700 text-gray-400 hover:border-gray-600'
-                      }`}>
-                      <Icon size={12} /> {label}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Forma de pago</span>
+                  <button type="button" onClick={() => setDividirPago(d => !d)}
+                    className="text-xs text-brand-400 hover:underline">
+                    {dividirPago ? 'Pago único' : 'Dividir pago'}
+                  </button>
                 </div>
+                {!dividirPago ? (
+                  <div className="flex gap-1.5">
+                    {FORMAS_PAGO.map(({ value, label, Icon }) => (
+                      <button key={value} type="button" onClick={() => setFormaPago(value)}
+                        className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                          formaPago === value ? 'bg-brand-600/20 border-brand-600/40 text-brand-400' : 'border-gray-700 text-gray-400 hover:border-gray-600'
+                        }`}>
+                        <Icon size={12} /> {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 bg-gray-800/50 rounded-xl p-2">
+                    {pagosSplit.map((p, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        <select className="input text-xs py-1.5 flex-shrink-0 w-[5.5rem]"
+                          value={p.metodo} onChange={e => actualizarPago(idx, 'metodo', e.target.value)}>
+                          {FORMAS_PAGO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </select>
+                        <input type="number" min="0" step="100"
+                          className="input flex-1 text-xs py-1.5 text-right tabular-nums" placeholder="0"
+                          value={p.monto} onChange={e => actualizarPago(idx, 'monto', e.target.value)} />
+                        {pagosSplit.length > 1 && (
+                          <button type="button" onClick={() => quitarLineaPago(idx)}
+                            className="text-gray-500 hover:text-red-400 flex-shrink-0">
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-0.5">
+                      <button type="button" onClick={agregarLineaPago} className="text-xs text-brand-400 hover:underline">
+                        + Agregar método
+                      </button>
+                      <span className={`text-xs font-semibold tabular-nums ${Math.abs(restantePago) < 1 ? 'text-green-400' : 'text-yellow-400'}`}>
+                        {Math.abs(restantePago) < 1
+                          ? '✓ Completo'
+                          : restantePago > 0
+                            ? `Falta ${formatMoney(restantePago)}`
+                            : `Sobra ${formatMoney(Math.abs(restantePago))}`}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <div className="relative">
                   <Tag size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input type="number" min="0" max="100" className="input w-full pl-8 text-sm py-2" placeholder="Descuento %"
@@ -1338,12 +1416,34 @@ export default function PuntoVentaPage() {
                 <span className="text-white">Total</span>
                 <span className="text-brand-400">{formatMoney(total)}</span>
               </div>
-              <p className="text-xs text-gray-500 mb-4">
-                {cliente && <>Cliente: {cliente} · </>}{canal} · {FORMAS_PAGO.find(f => f.value === formaPago)?.label}
+              <p className="text-xs text-gray-500 mb-1">
+                {cliente && <>Cliente: {cliente} · </>}{canal}
               </p>
+              {!dividirPago ? (
+                <p className="text-xs text-gray-500 mb-4">Pago: {FORMAS_PAGO.find(f => f.value === formaPago)?.label}</p>
+              ) : (
+                <div className="text-xs text-gray-500 mb-4 space-y-0.5">
+                  <p className="text-gray-400">Pago dividido:</p>
+                  {pagosSplit.filter(p => parseFloat(p.monto) > 0).map((p, idx) => (
+                    <p key={idx} className="flex justify-between">
+                      <span>{FORMAS_PAGO.find(f => f.value === p.metodo)?.label}</span>
+                      <span className="text-gray-300 font-medium">{formatMoney(parseFloat(p.monto))}</span>
+                    </p>
+                  ))}
+                  {Math.abs(restantePago) >= 1 && (
+                    <p className={restantePago > 0 ? 'text-yellow-400' : 'text-red-400'}>
+                      {restantePago > 0
+                        ? `Falta cubrir ${formatMoney(restantePago)}`
+                        : `Excede el total por ${formatMoney(Math.abs(restantePago))}`}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="flex gap-3">
                 <button onClick={() => setModalConfirm(false)} className="btn-secondary flex-1 text-sm">Cancelar</button>
-                <button onClick={() => ventaMutation.mutate()} disabled={ventaMutation.isPending} className="btn-primary flex-1 text-sm">
+                <button onClick={() => ventaMutation.mutate()}
+                  disabled={ventaMutation.isPending || (dividirPago && Math.abs(restantePago) >= 1)}
+                  className="btn-primary flex-1 text-sm">
                   {ventaMutation.isPending ? 'Registrando...' : 'Confirmar'}
                 </button>
               </div>
