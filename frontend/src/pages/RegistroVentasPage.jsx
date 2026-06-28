@@ -591,7 +591,7 @@ export default function RegistroVentasPage() {
                         {CanalIcon && <CanalIcon size={10} />}{canalInfo.label}
                       </span>
                       <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-lg ${pagoInfo.color}`}>
-                        {PagoIcon && <PagoIcon size={10} />}{pagoInfo.label}
+                        {PagoIcon && <PagoIcon size={10} />}{v.metodos_mixto || pagoInfo.label}
                       </span>
                       {v.nombre_cliente && <span className="text-xs text-gray-500 truncate max-w-32">{v.nombre_cliente}</span>}
                     </div>
@@ -661,7 +661,7 @@ export default function RegistroVentasPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg ${pagoInfo.color}`}>
-                        {PagoIcon && <PagoIcon size={11} />}{pagoInfo.label}
+                        {PagoIcon && <PagoIcon size={11} />}{v.metodos_mixto || pagoInfo.label}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-emerald-400 font-semibold">

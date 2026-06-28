@@ -632,6 +632,26 @@ async function getVentas(req, res) {
     sql += ' ORDER BY v.fecha DESC LIMIT 500';
 
     const ventas = await query(sql, params);
+
+    // Ventas con pago dividido: traer qué métodos se usaron (ej: "Efectivo + Tarjeta")
+    const grupos = [...new Set(ventas.filter(v => v.forma_pago === 'mixto' && v.venta_grupo).map(v => v.venta_grupo))];
+    if (grupos.length > 0) {
+      const METODO_LABEL = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', sinpe: 'Sinpe' };
+      const pagosMixtos = await query(
+        `SELECT venta_grupo, metodo FROM pagos_venta WHERE venta_grupo IN (?) GROUP BY venta_grupo, metodo`,
+        [grupos]
+      );
+      const metodosPorGrupo = {};
+      for (const p of pagosMixtos) {
+        (metodosPorGrupo[p.venta_grupo] = metodosPorGrupo[p.venta_grupo] || []).push(METODO_LABEL[p.metodo] || p.metodo);
+      }
+      for (const v of ventas) {
+        if (v.forma_pago === 'mixto' && metodosPorGrupo[v.venta_grupo]) {
+          v.metodos_mixto = metodosPorGrupo[v.venta_grupo].join(' + ');
+        }
+      }
+    }
+
     res.json({ success: true, data: ventas });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
