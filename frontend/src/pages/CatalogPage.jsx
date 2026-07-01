@@ -143,14 +143,18 @@ function FichaModal({ arreglo, onClose, onEditar }) {
 // ── Modal crear / editar arreglo ───────────────────────────────────────────
 
 function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
-  const esEdicion    = !!arreglo?.id;
-  const fileRef      = useRef(null);
-  const submittingRef = useRef(false);
+  const esEdicion     = !!arreglo?.id;
+  const fileRef       = useRef(null);
+  const submittingRef = useRef(false);        // guard síncrono (sin re-render)
+  const [enviando, setEnviando] = useState(false); // estado visual del botón
 
-  // Resetea el guard cuando la mutación termina (éxito o error)
-  // para que el usuario pueda reintentar si ocurrió un error.
+  // Cuando la mutación termina (éxito o error) limpia ambos guards
+  // para que el usuario pueda reintentar si ocurrió un error de red.
   useEffect(() => {
-    if (!isPending) submittingRef.current = false;
+    if (!isPending) {
+      submittingRef.current = false;
+      setEnviando(false);
+    }
   }, [isPending]);
 
   const [form, setForm] = useState({
@@ -259,15 +263,17 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Guard: evita doble envío por clicks rápidos o mientras sube la imagen
-    if (submittingRef.current || isPending) return;
+    // Doble guard: ref bloquea re-entradas síncronas antes del primer re-render;
+    // enviando/isPending cubren los clicks posteriores una vez el botón esté deshabilitado.
+    if (submittingRef.current || enviando || isPending) return;
     if (!form.nombre.trim()) return toast.error('Escribe un nombre para el arreglo');
     if (precioVenta <= 0)    return toast.error('El precio de venta debe ser mayor a 0');
 
-    submittingRef.current = true;
+    submittingRef.current = true;  // bloqueo síncrono inmediato
+    setEnviando(true);             // re-render → botón visualmente deshabilitado
+
     let urlFinal = imagenUrl;
 
-    // Subir imagen si hay una nueva
     if (imagenFile) {
       try {
         const fd = new FormData();
@@ -276,9 +282,10 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         urlFinal = res.data.url;
-      } catch (err) {
+      } catch {
         toast.error('Error al subir la imagen');
         submittingRef.current = false;
+        setEnviando(false);
         return;
       }
     }
@@ -290,7 +297,7 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
       ingredientes: ingredientes.map(i => ({ insumo_id: i.insumo_id, cantidad: i.cantidad })),
       ...(esEdicion && { id: arreglo.id }),
     });
-    // submittingRef se resetea en el useEffect cuando isPending vuelve a false
+    // ref + estado se limpian en el useEffect cuando isPending vuelve a false
   };
 
   return (
@@ -521,9 +528,9 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
           </div>
 
           <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={isPending}
-              className="btn-primary flex-1 justify-center">
-              {isPending ? 'Guardando...' : esEdicion ? 'Guardar cambios' : 'Crear arreglo'}
+            <button type="submit" disabled={isPending || enviando}
+              className="btn-primary flex-1 justify-center disabled:opacity-50">
+              {isPending || enviando ? 'Guardando...' : esEdicion ? 'Guardar cambios' : 'Crear arreglo'}
             </button>
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
               Cancelar
