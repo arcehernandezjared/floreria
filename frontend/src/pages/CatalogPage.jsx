@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, RefreshCw, Edit, Eye, Search,
@@ -143,8 +143,15 @@ function FichaModal({ arreglo, onClose, onEditar }) {
 // ── Modal crear / editar arreglo ───────────────────────────────────────────
 
 function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
-  const esEdicion = !!arreglo?.id;
-  const fileRef   = useRef(null);
+  const esEdicion    = !!arreglo?.id;
+  const fileRef      = useRef(null);
+  const submittingRef = useRef(false);
+
+  // Resetea el guard cuando la mutación termina (éxito o error)
+  // para que el usuario pueda reintentar si ocurrió un error.
+  useEffect(() => {
+    if (!isPending) submittingRef.current = false;
+  }, [isPending]);
 
   const [form, setForm] = useState({
     nombre:             arreglo?.nombre          ?? '',
@@ -252,9 +259,12 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Guard: evita doble envío por clicks rápidos o mientras sube la imagen
+    if (submittingRef.current || isPending) return;
     if (!form.nombre.trim()) return toast.error('Escribe un nombre para el arreglo');
     if (precioVenta <= 0)    return toast.error('El precio de venta debe ser mayor a 0');
 
+    submittingRef.current = true;
     let urlFinal = imagenUrl;
 
     // Subir imagen si hay una nueva
@@ -268,6 +278,7 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
         urlFinal = res.data.url;
       } catch (err) {
         toast.error('Error al subir la imagen');
+        submittingRef.current = false;
         return;
       }
     }
@@ -279,6 +290,7 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
       ingredientes: ingredientes.map(i => ({ insumo_id: i.insumo_id, cantidad: i.cantidad })),
       ...(esEdicion && { id: arreglo.id }),
     });
+    // submittingRef se resetea en el useEffect cuando isPending vuelve a false
   };
 
   return (
