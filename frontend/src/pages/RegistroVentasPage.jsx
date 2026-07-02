@@ -452,6 +452,7 @@ export default function RegistroVentasPage() {
   const [desde, setDesde]         = useState(inicioMes());
   const [hasta, setHasta]         = useState(hoy());
   const [canal, setCanal]         = useState('todos');
+  const [filtroPago, setFiltroPago] = useState('todos');
   const [modalEmail, setModalEmail] = useState(null);
   const [modalManual, setModalManual] = useState(false);
   const [modalDetalle, setModalDetalle] = useState(null);
@@ -459,9 +460,10 @@ export default function RegistroVentasPage() {
 
   const params = new URLSearchParams({ desde, hasta });
   if (canal !== 'todos') params.set('canal', canal);
+  if (filtroPago !== 'todos') params.set('forma_pago', filtroPago);
 
   const { data: ventas = [], isLoading } = useQuery({
-    queryKey: ['registro-ventas', desde, hasta, canal],
+    queryKey: ['registro-ventas', desde, hasta, canal, filtroPago],
     queryFn: () => api.get(`/catalogo/ventas?${params}`).then(r => r.data.data),
   });
 
@@ -489,6 +491,11 @@ export default function RegistroVentasPage() {
 
   const totalIngresos  = ventas.reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0);
   const promPorVenta   = ventas.length > 0 ? totalIngresos / ventas.length : 0;
+
+  const totalEfectivo = ventas.filter(v => v.forma_pago === 'efectivo').reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0);
+  const totalTarjeta  = ventas.filter(v => v.forma_pago === 'tarjeta').reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0);
+  const totalSinpe    = ventas.filter(v => v.forma_pago === 'sinpe').reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0);
+  const totalMixto    = ventas.filter(v => v.forma_pago === 'mixto').reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -533,6 +540,16 @@ export default function RegistroVentasPage() {
             <option value="pedido">Pedidos</option>
           </select>
         </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500">Método de pago</label>
+          <select className="input text-sm" value={filtroPago} onChange={e => setFiltroPago(e.target.value)}>
+            <option value="todos">Todos los métodos</option>
+            <option value="efectivo">Efectivo</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="sinpe">Sinpe</option>
+            <option value="mixto">Dividido</option>
+          </select>
+        </div>
         <div className="ml-auto text-xs text-gray-600">
           {isLoading ? 'Cargando...' : `${ventas.length} registro${ventas.length !== 1 ? 's' : ''}`}
         </div>
@@ -557,6 +574,34 @@ export default function RegistroVentasPage() {
           </p>
         </div>
       </div>
+
+      {/* Desglose por método de pago */}
+      {totalIngresos > 0 && (
+        <div className="card">
+          <p className="text-xs text-gray-500 uppercase tracking-wide mb-3">Por método de pago</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Efectivo',  monto: totalEfectivo, Icon: Banknote,    color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+              { label: 'Tarjeta',   monto: totalTarjeta,  Icon: CreditCard,  color: 'text-sky-400',     bg: 'bg-sky-500/10' },
+              { label: 'Sinpe',     monto: totalSinpe,    Icon: Smartphone,  color: 'text-purple-400',  bg: 'bg-purple-500/10' },
+              { label: 'Dividido',  monto: totalMixto,    Icon: Wallet,      color: 'text-amber-400',   bg: 'bg-amber-500/10' },
+            ].filter(m => m.monto > 0).map(({ label, monto, Icon, color, bg }) => (
+              <div key={label} className={`rounded-xl p-3 ${bg}`}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Icon size={13} className={color} />
+                  <span className="text-xs text-gray-400">{label}</span>
+                </div>
+                <p className={`text-lg font-bold tabular-nums ${color}`}>
+                  ₡{monto.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  {((monto / totalIngresos) * 100).toFixed(0)}% del total
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabla / Tarjetas */}
       <div className="card p-0 overflow-hidden">

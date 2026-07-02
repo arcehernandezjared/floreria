@@ -618,7 +618,7 @@ async function registrarVentaPOS(req, res) {
 
 async function getVentas(req, res) {
   try {
-    const { desde, hasta, canal } = req.query;
+    const { desde, hasta, canal, forma_pago } = req.query;
     let sql = `
       SELECT v.*, c.nombre as arreglo_nombre
       FROM ventas_floreria v
@@ -629,6 +629,7 @@ async function getVentas(req, res) {
     if (desde) { sql += " AND DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) >= ?"; params.push(desde); }
     if (hasta) { sql += " AND DATE(CONVERT_TZ(v.fecha, '+00:00', '-06:00')) <= ?"; params.push(hasta); }
     if (canal) { sql += ' AND v.canal = ?'; params.push(canal); }
+    if (forma_pago) { sql += ' AND v.forma_pago = ?'; params.push(forma_pago); }
     sql += ' ORDER BY v.fecha DESC LIMIT 500';
 
     const ventas = await query(sql, params);

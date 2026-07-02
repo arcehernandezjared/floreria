@@ -436,6 +436,7 @@ export default function PuntoVentaPage() {
   const [formaPago, setFormaPago]   = useState('efectivo');
   const [dividirPago, setDividirPago] = useState(false);
   const [pagosSplit, setPagosSplit] = useState([{ metodo: 'efectivo', monto: '' }, { metodo: 'tarjeta', monto: '' }]);
+  const [totalEditado, setTotalEditado] = useState('');
   const [descuento, setDescuento]   = useState(0);
   const [montoApertura, setMontoApertura] = useState('');
   const [modalAbono, setModalAbono] = useState(null);
@@ -516,9 +517,20 @@ export default function PuntoVentaPage() {
   const descuentoMonto = subtotal * (descuento / 100);
   const total = subtotal - descuentoMonto;
 
+  // Total final: usa el valor editado por el usuario si existe, sino el calculado
+  const totalFinal = totalEditado !== '' && parseFloat(totalEditado) > 0
+    ? parseFloat(totalEditado)
+    : total;
+
+  // Descuento efectivo a enviar al backend cuando el total fue modificado.
+  // Deriva el % que hace que los items sumen exactamente totalFinal.
+  const descuentoParaBackend = totalEditado !== '' && subtotalProductos > 0
+    ? (1 - (totalFinal - manoDeObra) / subtotalProductos) * 100
+    : descuento;
+
   // ── Pago dividido entre varios métodos ──────────────────────────────────
   const sumaPagosSplit = pagosSplit.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
-  const restantePago = total - sumaPagosSplit;
+  const restantePago = totalFinal - sumaPagosSplit;
 
   const actualizarPago = (idx, field, value) =>
     setPagosSplit(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
@@ -550,7 +562,7 @@ export default function PuntoVentaPage() {
 
       const pagos = dividirPago
         ? pagosSplit.filter(p => parseFloat(p.monto) > 0).map(p => ({ metodo: p.metodo, monto: parseFloat(p.monto) }))
-        : [{ metodo: formaPago, monto: total }];
+        : [{ metodo: formaPago, monto: totalFinal }];
 
       // Todo el carrito en UNA sola petición — el backend lo registra en una
       // sola transacción (todo o nada). Evita que si una parte falla por stock
@@ -572,14 +584,14 @@ export default function PuntoVentaPage() {
         canal,
         forma_pago: formaPago,
         pagos,
-        descuento,
+        descuento: descuentoParaBackend,
         fecha: fechaCR,
       });
     },
     onSuccess: () => {
       const pagos = dividirPago
         ? pagosSplit.filter(p => parseFloat(p.monto) > 0).map(p => ({ metodo: p.metodo, monto: parseFloat(p.monto) }))
-        : [{ metodo: formaPago, monto: total }];
+        : [{ metodo: formaPago, monto: totalFinal }];
       const snap = {
         numero: `VTA-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
         items: carrito.map(i => ({ ...i })),
@@ -591,7 +603,7 @@ export default function PuntoVentaPage() {
         manoDeObra,
         subtotal,
         descuentoMonto,
-        total,
+        total: totalFinal,
         pagos,
         fecha: new Date().toLocaleString('es-CR'),
       };
@@ -614,6 +626,7 @@ export default function PuntoVentaPage() {
     setFormaPago('efectivo');
     setDividirPago(false);
     setPagosSplit([{ metodo: 'efectivo', monto: '' }, { metodo: 'tarjeta', monto: '' }]);
+    setTotalEditado('');
     toast.success('Venta registrada');
   };
 
@@ -1185,9 +1198,29 @@ export default function PuntoVentaPage() {
                     )}
                   </>
                 )}
-                <div className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3">
-                  <span className="text-gray-300 font-semibold text-base">Total</span>
-                  <span className="text-brand-400 font-extrabold text-xl tabular-nums">{formatMoney(total)}</span>
+                <div className="bg-gray-800 rounded-xl px-4 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-gray-300 font-semibold text-base flex-shrink-0">Total</span>
+                      {totalEditado !== '' && Math.abs(parseFloat(totalEditado) - total) > 1 && (
+                        <button type="button" onClick={() => setTotalEditado('')}
+                          className="text-xs text-yellow-400 hover:text-yellow-300 hover:underline truncate">
+                          Restaurar {formatMoney(total)}
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="number" min="0" step="100"
+                      className="bg-transparent text-brand-400 font-extrabold text-xl tabular-nums text-right w-32 outline-none border-b-2 border-transparent focus:border-brand-500 transition-colors"
+                      value={totalEditado !== '' ? totalEditado : Math.round(total)}
+                      onChange={e => setTotalEditado(e.target.value)}
+                      onFocus={e => { if (totalEditado === '') setTotalEditado(String(Math.round(total))); e.target.select(); }}
+                      onBlur={e => { if (!e.target.value || parseFloat(e.target.value) <= 0) setTotalEditado(''); }}
+                    />
+                  </div>
+                  {totalEditado !== '' && Math.abs(parseFloat(totalEditado) - total) > 1 && (
+                    <p className="text-xs text-yellow-400/70 mt-0.5">Total modificado manualmente</p>
+                  )}
                 </div>
               </div>
 
@@ -1414,7 +1447,7 @@ export default function PuntoVentaPage() {
               )}
               <div className="flex justify-between font-bold text-base border-t border-gray-700 pt-3 mb-4">
                 <span className="text-white">Total</span>
-                <span className="text-brand-400">{formatMoney(total)}</span>
+                <span className="text-brand-400">{formatMoney(totalFinal)}</span>
               </div>
               <p className="text-xs text-gray-500 mb-1">
                 {cliente && <>Cliente: {cliente} · </>}{canal}
