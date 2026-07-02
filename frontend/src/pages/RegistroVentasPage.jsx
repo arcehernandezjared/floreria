@@ -220,8 +220,14 @@ function ModalEmail({ venta, onClose }) {
   );
 }
 
+const METODOS_PAGO = [
+  { value: 'efectivo', label: 'Efectivo', Icon: Banknote },
+  { value: 'tarjeta',  label: 'Tarjeta',  Icon: CreditCard },
+  { value: 'sinpe',    label: 'Sinpe',    Icon: Smartphone },
+];
+
 function ModalVentaManual({ onClose, onSave, isPending }) {
-  const [form, setForm] = useState({ concepto: 'Venta general', monto: '', fecha: hoy(), canal: 'mostrador', nombre_cliente: '' });
+  const [form, setForm] = useState({ concepto: 'Venta general', monto: '', fecha: hoy(), canal: 'mostrador', nombre_cliente: '', forma_pago: 'efectivo' });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   return (
@@ -245,6 +251,21 @@ function ModalVentaManual({ onClose, onSave, isPending }) {
             <div>
               <label className="label">Fecha *</label>
               <input className="input" type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Método de pago</label>
+            <div className="flex gap-2">
+              {METODOS_PAGO.map(({ value, label, Icon }) => (
+                <button key={value} type="button" onClick={() => set('forma_pago', value)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border transition-all ${
+                    form.forma_pago === value
+                      ? 'bg-brand-600/20 border-brand-600/40 text-brand-400'
+                      : 'border-gray-700 text-gray-400 hover:border-gray-600'
+                  }`}>
+                  <Icon size={13} />{label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
