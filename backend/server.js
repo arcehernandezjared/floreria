@@ -50,6 +50,13 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(require('path').join(__dirname, 'uploads')));
+// Fallback para archivos de upload que ya no existen en el filesystem de Render.
+// Devuelve un GIF transparente de 1×1 px en lugar de JSON → evita OpaqueResponseBlocking en Chrome.
+const _transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+app.use('/uploads', (_req, res) => {
+  res.setHeader('Content-Type', 'image/gif');
+  res.status(404).end(_transparentGif);
+});
 
 app.set('io', io);
 

@@ -17,6 +17,12 @@ const getImgUrl = (url) => {
   return `${BACKEND_BASE}${url}`;
 };
 
+function ImgFallback({ src, alt, imgClass, fallback }) {
+  const [broken, setBroken] = React.useState(false);
+  if (!src || broken) return fallback ?? null;
+  return <img src={src} alt={alt} className={imgClass} onError={() => setBroken(true)} />;
+}
+
 const CANALES = [
   { value: 'mostrador', label: 'Mostrador' },
   { value: 'whatsapp',  label: 'WhatsApp' },
@@ -906,14 +912,13 @@ export default function PuntoVentaPage() {
                   <motion.div key={arreglo.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     onClick={() => agregarArreglo(arreglo)}
                     className={`card cursor-pointer transition-all select-none ${enCarrito ? 'border-brand-500/50 bg-brand-500/5' : 'hover:border-gray-600'}`}>
-                    {arreglo.imagen_url ? (
-                      <img src={getImgUrl(arreglo.imagen_url)} alt={arreglo.nombre}
-                        className="w-full h-24 object-cover rounded-xl mb-3 border border-gray-700" />
-                    ) : (
-                      <div className="w-full h-24 bg-gradient-to-br from-brand-900/40 to-emerald-900/40 rounded-xl mb-3 flex items-center justify-center border border-gray-700">
-                        <Flower2 size={32} className="text-brand-400/60" />
-                      </div>
-                    )}
+                    <ImgFallback src={getImgUrl(arreglo.imagen_url)} alt={arreglo.nombre}
+                      imgClass="w-full h-24 object-cover rounded-xl mb-3 border border-gray-700"
+                      fallback={
+                        <div className="w-full h-24 bg-gradient-to-br from-brand-900/40 to-emerald-900/40 rounded-xl mb-3 flex items-center justify-center border border-gray-700">
+                          <Flower2 size={32} className="text-brand-400/60" />
+                        </div>
+                      } />
                     <p className="font-semibold text-white text-sm leading-tight mb-0.5">{arreglo.nombre}</p>
                     {arreglo.codigo && <p className="text-xs text-brand-600 font-mono mb-0.5">{arreglo.codigo}</p>}
                     <p className="text-brand-400 font-bold">{formatMoney(arreglo.precio_venta)}</p>
@@ -956,14 +961,13 @@ export default function PuntoVentaPage() {
                     whileHover={{ scale: stockOk ? 1.02 : 1 }} whileTap={{ scale: stockOk ? 0.98 : 1 }}
                     onClick={() => stockOk && agregarFlor(insumo)}
                     className={`card transition-all select-none ${!stockOk ? 'opacity-40 cursor-not-allowed' : enCarrito ? 'border-brand-500/50 bg-brand-500/5 cursor-pointer' : 'hover:border-gray-600 cursor-pointer'}`}>
-                    {getImgUrl(insumo.imagen_url) ? (
-                      <img src={getImgUrl(insumo.imagen_url)} alt={insumo.nombre}
-                        className="w-full h-24 object-cover rounded-xl mb-3 border border-gray-700" />
-                    ) : (
-                      <div className="w-full h-24 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl mb-3 flex items-center justify-center border border-gray-700">
-                        <Leaf size={32} className={TIPO_COLOR[insumo.categoria_tipo] || 'text-gray-500'} style={{ opacity: 0.6 }} />
-                      </div>
-                    )}
+                    <ImgFallback src={getImgUrl(insumo.imagen_url)} alt={insumo.nombre}
+                      imgClass="w-full h-24 object-cover rounded-xl mb-3 border border-gray-700"
+                      fallback={
+                        <div className="w-full h-24 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl mb-3 flex items-center justify-center border border-gray-700">
+                          <Leaf size={32} className={TIPO_COLOR[insumo.categoria_tipo] || 'text-gray-500'} style={{ opacity: 0.6 }} />
+                        </div>
+                      } />
                     <p className="font-semibold text-white text-sm leading-tight mb-0.5">{insumo.nombre}</p>
                     <div className="flex items-center gap-2 mb-1">
                       <p className="text-xs text-gray-500">{insumo.categoria_nombre}</p>

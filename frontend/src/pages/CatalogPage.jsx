@@ -16,6 +16,12 @@ const getImgUrl = (url) => {
   return `${BACKEND_BASE}${url}`;
 };
 
+function ImgFallback({ src, alt, imgClass, fallback }) {
+  const [broken, setBroken] = React.useState(false);
+  if (!src || broken) return fallback ?? null;
+  return <img src={src} alt={alt} className={imgClass} onError={() => setBroken(true)} />;
+}
+
 const FRACCIONES = [
   { label: '1', val: 1 },
   { label: '½', val: 0.5 },
@@ -82,10 +88,9 @@ function FichaModal({ arreglo, onClose, onEditar }) {
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
         </div>
 
-        {imgUrl && (
-          <img src={imgUrl} alt={arreglo.nombre}
-            className="w-full h-48 object-cover rounded-xl mb-4 border border-gray-700" />
-        )}
+        <ImgFallback src={imgUrl} alt={arreglo.nombre}
+          imgClass="w-full h-48 object-cover rounded-xl mb-4 border border-gray-700"
+          fallback={null} />
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           {[
@@ -322,7 +327,8 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
             {imagenPreview ? (
               <div className="relative w-full h-44 rounded-xl overflow-hidden border border-gray-700 group">
                 <img src={imagenPreview} alt="preview"
-                  className="w-full h-full object-cover" />
+                  className="w-full h-full object-cover"
+                  onError={() => { setImagenPreview(null); setImagenUrl(null); }} />
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                   <button type="button" onClick={() => fileRef.current?.click()}
                     className="btn-secondary text-xs py-1.5 px-3">
@@ -675,17 +681,16 @@ export default function CatalogPage() {
               className={`card hover:border-brand-600/30 transition-colors ${!a.activo ? 'opacity-50' : ''}`}>
 
               {/* Imagen o placeholder */}
-              {imgUrl ? (
-                <img src={imgUrl} alt={a.nombre}
-                  className="w-full h-36 object-cover rounded-xl mb-4 border border-gray-700" />
-              ) : (
-                <div className="w-full h-36 bg-gradient-to-br from-brand-900/30 to-gray-800 rounded-xl mb-4 flex items-center justify-center relative border border-gray-800">
-                  <Flower2 size={32} className="text-brand-400/40" />
-                  {!a.activo && (
-                    <span className="absolute top-2 right-2 badge badge-red text-xs">Inactivo</span>
-                  )}
-                </div>
-              )}
+              <ImgFallback src={imgUrl} alt={a.nombre}
+                imgClass="w-full h-36 object-cover rounded-xl mb-4 border border-gray-700"
+                fallback={
+                  <div className="w-full h-36 bg-gradient-to-br from-brand-900/30 to-gray-800 rounded-xl mb-4 flex items-center justify-center relative border border-gray-800">
+                    <Flower2 size={32} className="text-brand-400/40" />
+                    {!a.activo && (
+                      <span className="absolute top-2 right-2 badge badge-red text-xs">Inactivo</span>
+                    )}
+                  </div>
+                } />
 
               <div className="space-y-2">
                 <div className="min-w-0">

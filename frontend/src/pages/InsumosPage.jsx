@@ -12,6 +12,12 @@ const getImgUrl = (url) => {
   return `${BACKEND_BASE}${url}`;
 };
 
+function ImgFallback({ src, alt, imgClass, fallback }) {
+  const [broken, setBroken] = React.useState(false);
+  if (!src || broken) return fallback ?? null;
+  return <img src={src} alt={alt} className={imgClass} onError={() => setBroken(true)} />;
+}
+
 const UNIDADES = ['tallo', 'unidad', 'bloque', 'metro'];
 
 // ── Categorías Modal ─────────────────────────────────────────────────────────
@@ -193,7 +199,8 @@ function InsumoModal({ insumo, categorias, proveedores, onClose, onSave }) {
             <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
             {imagenPreview ? (
               <div className="relative w-full h-36 rounded-xl overflow-hidden border border-gray-700 group">
-                <img src={imagenPreview} alt="preview" className="w-full h-full object-cover" />
+                <img src={imagenPreview} alt="preview" className="w-full h-full object-cover"
+                  onError={() => { setImagenPreview(null); setImagenUrl(null); }} />
                 {subiendoImg && (
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                     <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -320,13 +327,12 @@ function InsumoCard({ insumo, onEdit, onDelete, confirmDeleteId, setConfirmDelet
 
       {/* Imagen o placeholder */}
       <div className="relative h-32 bg-gradient-to-br from-gray-800 to-gray-900 flex-shrink-0">
-        {imgUrl ? (
-          <img src={imgUrl} alt={insumo.nombre} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-4xl opacity-30">🌿</span>
-          </div>
-        )}
+        <ImgFallback src={imgUrl} alt={insumo.nombre} imgClass="w-full h-full object-cover"
+          fallback={
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-4xl opacity-30">🌿</span>
+            </div>
+          } />
         {/* Badge de estado */}
         <div className={`absolute top-2 right-2 flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
           {statusConfig.icon}
