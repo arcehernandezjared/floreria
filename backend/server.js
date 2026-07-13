@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -46,6 +47,7 @@ const corsOptions = {
 
 const io = new Server(server, { cors: corsOptions });
 
+app.use(compression());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

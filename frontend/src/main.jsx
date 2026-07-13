@@ -6,7 +6,14 @@ import App from './App';
 import './index.css';
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30000 } }
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 3 * 60 * 1000,       // 3 min — evita refetch al navegar entre páginas
+      gcTime:    10 * 60 * 1000,       // 10 min en caché aunque el componente se desmonte
+      refetchOnWindowFocus: false,     // no refetch al volver a la pestaña
+    }
+  }
 });
 
 ReactDOM.createRoot(document.getElementById('root')).render(
