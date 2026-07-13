@@ -9,8 +9,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 3 * 60 * 1000,       // 3 min — evita refetch al navegar entre páginas
-      gcTime:    10 * 60 * 1000,       // 10 min en caché aunque el componente se desmonte
+      staleTime: 5 * 60 * 1000,       // 5 min — datos frescos sin refetch al navegar
+      gcTime:    30 * 60 * 1000,       // 30 min en memoria aunque el componente se desmonte
       refetchOnWindowFocus: false,     // no refetch al volver a la pestaña
     }
   }

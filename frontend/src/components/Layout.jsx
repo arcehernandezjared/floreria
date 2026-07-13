@@ -56,6 +56,16 @@ export default function Layout() {
   const notifRef                      = useRef(null);
   const qc                            = useQueryClient();
 
+  // Precarga los datos más usados al iniciar — quedan en caché para todas las páginas
+  useEffect(() => {
+    const prefetch = (key, url) =>
+      qc.prefetchQuery({ queryKey: key, queryFn: () => api.get(url).then(r => r.data.data) });
+    prefetch(['insumos'],     '/insumos');
+    prefetch(['categorias'],  '/insumos/categorias');
+    prefetch(['catalogo'],    '/catalogo');
+    prefetch(['proveedores'], '/proveedores');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { data: notificaciones = [] } = useQuery({
     queryKey: ['notificaciones'],
     queryFn: () => api.get('/notificaciones').then(r => r.data.data),
