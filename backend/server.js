@@ -83,6 +83,22 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', sistema: 'Floristería Alma Caribeña', timestamp: new Date() });
 });
 
+// Auto-ping para evitar que Render Free Tier duerma el servidor.
+// Solo se activa en producción donde RENDER_EXTERNAL_URL está disponible.
+function startKeepAlive() {
+  const selfUrl = process.env.RENDER_EXTERNAL_URL;
+  if (!selfUrl) return; // solo en Render
+  const pingUrl = `${selfUrl}/api/health`;
+  setInterval(async () => {
+    try {
+      const https = require('https');
+      https.get(pingUrl, (r) => { r.resume(); }).on('error', () => {});
+      logger.info(`keep-alive ping → ${pingUrl}`);
+    } catch (_) {}
+  }, 14 * 60 * 1000); // cada 14 minutos
+  logger.info(`Keep-alive activado (${pingUrl}, cada 14 min)`);
+}
+
 app.use((err, req, res, next) => {
   logger.error(`${err.message} - ${req.originalUrl}`);
   res.status(err.status || 500).json({ success: false, message: err.message || 'Error interno' });
@@ -102,6 +118,7 @@ async function start() {
   await require('./src/controllers/catalogoController').ensureFormaPago();
   await require('./src/controllers/catalogoController').ensurePagoMixto();
   await require('./src/controllers/insumoController').ensureCodigoInsumos();
+  await require('./src/controllers/insumoController').limpiarImagenesLocales();
   await require('./src/controllers/cierresController').ensureTable();
   await require('./src/controllers/cajaController').ensureTable();
   await require('./src/controllers/pedidosController').ensureTable();
@@ -118,6 +135,7 @@ async function start() {
   server.listen(PORT, () => {
     logger.info(`Floristería Alma Caribeña Backend corriendo en puerto ${PORT}`);
     logger.info(`Ambiente: ${process.env.NODE_ENV}`);
+    startKeepAlive();
   });
 }
 

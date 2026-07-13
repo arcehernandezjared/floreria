@@ -366,8 +366,51 @@ async function deleteCategoria(req, res) {
   }
 }
 
+// Elimina imágenes /uploads/ del filesystem efímero de Render — ya no existen tras cada deploy
+async function limpiarImagenesLocales() {
+  try {
+    const ri = await query(`UPDATE insumos SET imagen_url = NULL WHERE imagen_url LIKE '/uploads/%'`);
+    const rc = await query(`UPDATE catalogo SET imagen_url = NULL WHERE imagen_url LIKE '/uploads/%'`);
+    if (ri.affectedRows > 0 || rc.affectedRows > 0) {
+      logger.info(`limpiarImagenesLocales: ${ri.affectedRows} insumos + ${rc.affectedRows} catálogo con /uploads/ → NULL`);
+    }
+  } catch (e) {
+    logger.warn(`limpiarImagenesLocales: ${e.message}`);
+  }
+}
+
+async function diagnosticoImagenes(req, res) {
+  try {
+    const insumos  = await query(`SELECT id, nombre, imagen_url FROM insumos  WHERE imagen_url IS NOT NULL ORDER BY id`);
+    const catalogo = await query(`SELECT id, nombre, imagen_url FROM catalogo WHERE imagen_url IS NOT NULL ORDER BY id`);
+
+    const classify = (url) => {
+      if (!url) return 'null';
+      if (url.startsWith('https://res.cloudinary.com')) return 'cloudinary';
+      if (url.startsWith('/uploads')) return 'local_uploads';
+      if (url.startsWith('http')) return 'url_externa';
+      return 'otro';
+    };
+
+    const resumen = (rows) => {
+      const counts = { cloudinary: 0, local_uploads: 0, url_externa: 0, otro: 0 };
+      rows.forEach(r => counts[classify(r.imagen_url)]++);
+      return counts;
+    };
+
+    res.json({
+      success: true,
+      insumos:  { total: insumos.length,  resumen: resumen(insumos),  items: insumos.map(r => ({ id: r.id, nombre: r.nombre, tipo: classify(r.imagen_url), url: r.imagen_url })) },
+      catalogo: { total: catalogo.length, resumen: resumen(catalogo), items: catalogo.map(r => ({ id: r.id, nombre: r.nombre, tipo: classify(r.imagen_url), url: r.imagen_url })) },
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
 module.exports = {
-  ensureCodigoInsumos, uploadImagenInsumo,
+  ensureCodigoInsumos, limpiarImagenesLocales, diagnosticoImagenes,
+  uploadImagenInsumo,
   getInsumos, getCategorias, createInsumo, updateInsumo, deleteInsumo,
   getStockBajo, ajustarStock, getHistorialCostos, ventaDirecta,
   createCategoria, updateCategoria, deleteCategoria

@@ -14,6 +14,7 @@ const upload = multer({
 
 router.use(authMiddleware);
 
+router.get('/diagnostico-imagenes', ctrl.diagnosticoImagenes);
 router.get('/', ctrl.getInsumos);
 router.get('/categorias', ctrl.getCategorias);
 router.post('/categorias', ctrl.createCategoria);
