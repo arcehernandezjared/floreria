@@ -6,16 +6,30 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3002/api').replace('/api', '');
-const getImgUrl = (url) => {
+const getImgUrl = (url, size = null) => {
   if (!url) return null;
-  if (url.startsWith('http')) return url;
+  if (url.startsWith('http')) {
+    // Aplicar transformaciones de Cloudinary para thumbnails
+    if (size && url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+      return url.replace('/upload/', `/upload/${size},q_auto,f_auto/`);
+    }
+    return url;
+  }
   return `${BACKEND_BASE}${url}`;
 };
 
-function ImgFallback({ src, alt, imgClass, fallback }) {
+function ImgFallback({ src, alt, imgClass, fallback, lazy = true }) {
   const [broken, setBroken] = React.useState(false);
   if (!src || broken) return fallback ?? null;
-  return <img src={src} alt={alt} className={imgClass} onError={() => setBroken(true)} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={imgClass}
+      loading={lazy ? 'lazy' : 'eager'}
+      onError={() => setBroken(true)}
+    />
+  );
 }
 
 const UNIDADES = ['tallo', 'unidad', 'bloque', 'metro'];
@@ -319,7 +333,7 @@ function InsumoCard({ insumo, onEdit, onDelete, confirmDeleteId, setConfirmDelet
     ok:      { label: 'Disponible',   bg: 'bg-emerald-500/15',text: 'text-emerald-400',bar: 'bg-brand-500',  icon: <CheckCircle size={11} /> },
   }[status];
 
-  const imgUrl = getImgUrl(insumo.imagen_url);
+  const imgUrl = getImgUrl(insumo.imagen_url, 'w_400,h_300,c_fill');
 
   return (
     <motion.div layout initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}

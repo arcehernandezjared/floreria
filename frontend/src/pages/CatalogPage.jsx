@@ -10,16 +10,29 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3002/api').replace('/api', '');
-const getImgUrl = (url) => {
+const getImgUrl = (url, size = null) => {
   if (!url) return null;
-  if (url.startsWith('http')) return url;
+  if (url.startsWith('http')) {
+    if (size && url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+      return url.replace('/upload/', `/upload/${size},q_auto,f_auto/`);
+    }
+    return url;
+  }
   return `${BACKEND_BASE}${url}`;
 };
 
-function ImgFallback({ src, alt, imgClass, fallback }) {
+function ImgFallback({ src, alt, imgClass, fallback, lazy = true }) {
   const [broken, setBroken] = React.useState(false);
   if (!src || broken) return fallback ?? null;
-  return <img src={src} alt={alt} className={imgClass} onError={() => setBroken(true)} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={imgClass}
+      loading={lazy ? 'lazy' : 'eager'}
+      onError={() => setBroken(true)}
+    />
+  );
 }
 
 const FRACCIONES = [
@@ -75,7 +88,7 @@ function CantidadInput({ value, onChange }) {
 
 function FichaModal({ arreglo, onClose, onEditar }) {
   if (!arreglo) return null;
-  const imgUrl = getImgUrl(arreglo.imagen_url);
+  const imgUrl = getImgUrl(arreglo.imagen_url, 'w_800,h_400,c_fill');
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -90,7 +103,7 @@ function FichaModal({ arreglo, onClose, onEditar }) {
 
         <ImgFallback src={imgUrl} alt={arreglo.nombre}
           imgClass="w-full h-48 object-cover rounded-xl mb-4 border border-gray-700"
-          fallback={null} />
+          fallback={null} lazy={false} />
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           {[
@@ -674,7 +687,7 @@ export default function CatalogPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {catalogoFiltrado.map(a => {
           const costo  = parseFloat(a.costo_actual || a.costo_calculado || 0);
-          const imgUrl = getImgUrl(a.imagen_url);
+          const imgUrl = getImgUrl(a.imagen_url, 'w_600,h_300,c_fill');
 
           return (
             <motion.div key={a.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}

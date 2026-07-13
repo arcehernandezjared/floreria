@@ -11,16 +11,29 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3002/api').replace('/api', '');
-const getImgUrl = (url) => {
+const getImgUrl = (url, size = null) => {
   if (!url) return null;
-  if (url.startsWith('http')) return url;
+  if (url.startsWith('http')) {
+    if (size && url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+      return url.replace('/upload/', `/upload/${size},q_auto,f_auto/`);
+    }
+    return url;
+  }
   return `${BACKEND_BASE}${url}`;
 };
 
-function ImgFallback({ src, alt, imgClass, fallback }) {
+function ImgFallback({ src, alt, imgClass, fallback, lazy = true }) {
   const [broken, setBroken] = React.useState(false);
   if (!src || broken) return fallback ?? null;
-  return <img src={src} alt={alt} className={imgClass} onError={() => setBroken(true)} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={imgClass}
+      loading={lazy ? 'lazy' : 'eager'}
+      onError={() => setBroken(true)}
+    />
+  );
 }
 
 const CANALES = [
@@ -912,7 +925,7 @@ export default function PuntoVentaPage() {
                   <motion.div key={arreglo.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     onClick={() => agregarArreglo(arreglo)}
                     className={`card cursor-pointer transition-all select-none ${enCarrito ? 'border-brand-500/50 bg-brand-500/5' : 'hover:border-gray-600'}`}>
-                    <ImgFallback src={getImgUrl(arreglo.imagen_url)} alt={arreglo.nombre}
+                    <ImgFallback src={getImgUrl(arreglo.imagen_url, 'w_400,h_200,c_fill')} alt={arreglo.nombre}
                       imgClass="w-full h-24 object-cover rounded-xl mb-3 border border-gray-700"
                       fallback={
                         <div className="w-full h-24 bg-gradient-to-br from-brand-900/40 to-emerald-900/40 rounded-xl mb-3 flex items-center justify-center border border-gray-700">
@@ -961,7 +974,7 @@ export default function PuntoVentaPage() {
                     whileHover={{ scale: stockOk ? 1.02 : 1 }} whileTap={{ scale: stockOk ? 0.98 : 1 }}
                     onClick={() => stockOk && agregarFlor(insumo)}
                     className={`card transition-all select-none ${!stockOk ? 'opacity-40 cursor-not-allowed' : enCarrito ? 'border-brand-500/50 bg-brand-500/5 cursor-pointer' : 'hover:border-gray-600 cursor-pointer'}`}>
-                    <ImgFallback src={getImgUrl(insumo.imagen_url)} alt={insumo.nombre}
+                    <ImgFallback src={getImgUrl(insumo.imagen_url, 'w_400,h_200,c_fill')} alt={insumo.nombre}
                       imgClass="w-full h-24 object-cover rounded-xl mb-3 border border-gray-700"
                       fallback={
                         <div className="w-full h-24 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl mb-3 flex items-center justify-center border border-gray-700">
