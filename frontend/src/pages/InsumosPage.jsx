@@ -424,9 +424,10 @@ export default function InsumosPage() {
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [filtroEstado, setFiltroEstado]     = useState('');
 
+  // Carga todos los insumos una vez — filtros de categoría/búsqueda son client-side
   const { data: insumos = [] } = useQuery({
-    queryKey: ['insumos', busqueda, filtroCategoria],
-    queryFn: () => api.get('/insumos', { params: { busqueda: busqueda || undefined, categoria_id: filtroCategoria || undefined } }).then(r => r.data.data)
+    queryKey: ['insumos'],
+    queryFn: () => api.get('/insumos').then(r => r.data.data)
   });
   const { data: categorias = [] } = useQuery({ queryKey: ['categorias'], queryFn: () => api.get('/insumos/categorias').then(r => r.data.data) });
   const { data: proveedores = [] } = useQuery({ queryKey: ['proveedores'], queryFn: () => api.get('/proveedores').then(r => r.data.data) });
@@ -459,18 +460,20 @@ export default function InsumosPage() {
     return { total, agotados, bajos, ok, valorTotal };
   }, [insumos]);
 
-  // Filtro de estado
+  // Todos los filtros en client-side — sin requests adicionales al backend
   const insumosFiltrados = useMemo(() => {
-    if (!filtroEstado) return insumos;
     return insumos.filter(i => {
       const s = parseFloat(i.stock_actual);
       const m = parseFloat(i.stock_minimo);
+      if (filtroCategoria && String(i.categoria_id) !== String(filtroCategoria)) return false;
+      if (busqueda && !i.nombre.toLowerCase().includes(busqueda.toLowerCase()) &&
+          !(i.codigo || '').toLowerCase().includes(busqueda.toLowerCase())) return false;
       if (filtroEstado === 'agotado') return s === 0;
       if (filtroEstado === 'bajo')    return s > 0 && s <= m;
       if (filtroEstado === 'ok')      return s > m;
       return true;
     });
-  }, [insumos, filtroEstado]);
+  }, [insumos, filtroCategoria, busqueda, filtroEstado]);
 
   return (
     <div className="space-y-6 animate-fade-in">
