@@ -130,4 +130,33 @@ async function recibirCompra(req, res) {
   }
 }
 
-module.exports = { getCompras, getCompra, createCompra, recibirCompra };
+async function eliminarCompra(req, res) {
+  try {
+    const { id } = req.params;
+    const compra = await queryOne('SELECT * FROM compras WHERE id = ?', [id]);
+    if (!compra) return res.status(404).json({ success: false, message: 'Compra no encontrada' });
+
+    const items = await query('SELECT * FROM compra_items WHERE compra_id = ?', [id]);
+
+    await transaction(async (conn) => {
+      // Si la compra ya sumó stock (estado = 'recibida'), revertir
+      if (compra.estado === 'recibida') {
+        for (const item of items) {
+          await conn.query(
+            'UPDATE insumos SET stock_actual = GREATEST(0, stock_actual - ?) WHERE id = ?',
+            [item.cantidad, item.insumo_id]
+          );
+        }
+      }
+      await conn.query('DELETE FROM compra_items WHERE compra_id = ?', [id]);
+      await conn.query('DELETE FROM compras WHERE id = ?', [id]);
+    });
+
+    res.json({ success: true, message: 'Compra eliminada y stock revertido' });
+  } catch (error) {
+    logger.error(`eliminarCompra: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+module.exports = { getCompras, getCompra, createCompra, recibirCompra, eliminarCompra };

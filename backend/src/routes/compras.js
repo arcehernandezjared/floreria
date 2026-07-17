@@ -8,5 +8,6 @@ router.get('/', ctrl.getCompras);
 router.get('/:id', ctrl.getCompra);
 router.post('/', ctrl.createCompra);
 router.post('/:id/recibir', ctrl.recibirCompra);
+router.delete('/:id', ctrl.eliminarCompra);
 
 module.exports = router;

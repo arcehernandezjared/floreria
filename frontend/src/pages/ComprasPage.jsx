@@ -156,6 +156,7 @@ function NuevaCompraModal({ onClose, onSave, proveedores, insumos, categorias })
 export default function ComprasPage() {
   const qc = useQueryClient();
   const [modal, setModal] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const { data: compras = [] } = useQuery({ queryKey: ['compras'], queryFn: () => api.get('/compras').then(r => r.data.data) });
   const { data: proveedores = [] } = useQuery({ queryKey: ['proveedores'], queryFn: () => api.get('/proveedores').then(r => r.data.data) });
@@ -171,6 +172,17 @@ export default function ComprasPage() {
       setModal(false);
     },
     onError: (e) => toast.error(e.response?.data?.message || 'Error')
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => api.delete(`/compras/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries(['compras']);
+      qc.invalidateQueries(['insumos']);
+      toast.success('Compra eliminada — Stock revertido');
+      setConfirmDeleteId(null);
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error al eliminar')
   });
 
   return (
@@ -207,7 +219,25 @@ export default function ComprasPage() {
                     </span>
                     <span className="text-xs text-gray-500">{c.total_items} items</span>
                   </div>
-                  <span className="text-xs text-gray-500">{formatDate(c.fecha)}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">{formatDate(c.fecha)}</span>
+                    {confirmDeleteId === c.id ? (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => deleteMut.mutate(c.id)} disabled={deleteMut.isPending}
+                          className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-1 rounded-lg font-medium">
+                          {deleteMut.isPending ? '...' : 'Confirmar'}
+                        </button>
+                        <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-500 hover:text-gray-300 px-1 py-1">
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmDeleteId(c.id)}
+                        className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -225,6 +255,7 @@ export default function ComprasPage() {
                 <th className="th">Items</th>
                 <th className="th">Total</th>
                 <th className="th">Estado</th>
+                <th className="th"></th>
               </tr>
             </thead>
             <tbody>
@@ -243,10 +274,28 @@ export default function ComprasPage() {
                       {c.estado}
                     </span>
                   </td>
+                  <td className="td">
+                    {confirmDeleteId === c.id ? (
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => deleteMut.mutate(c.id)} disabled={deleteMut.isPending}
+                          className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-1 rounded-lg font-medium whitespace-nowrap">
+                          {deleteMut.isPending ? '...' : '¿Eliminar?'}
+                        </button>
+                        <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-500 hover:text-gray-300">
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmDeleteId(c.id)}
+                        className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded">
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
               {compras.length === 0 && (
-                <tr><td colSpan={6} className="td text-center text-gray-600 py-8">Sin compras registradas</td></tr>
+                <tr><td colSpan={7} className="td text-center text-gray-600 py-8">Sin compras registradas</td></tr>
               )}
             </tbody>
           </table>
