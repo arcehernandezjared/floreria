@@ -542,9 +542,9 @@ export default function PuntoVentaPage() {
     : total;
 
   // Descuento efectivo a enviar al backend cuando el total fue modificado.
-  // Deriva el % que hace que los items sumen exactamente totalFinal.
+  // Clampear a >= 0: un total editado mayor que el calculado no debe generar markup.
   const descuentoParaBackend = totalEditado !== '' && subtotalProductos > 0
-    ? (1 - (totalFinal - manoDeObra) / subtotalProductos) * 100
+    ? Math.max(0, (1 - (totalFinal - manoDeObra) / subtotalProductos) * 100)
     : descuento;
 
   // ── Pago dividido entre varios métodos ──────────────────────────────────

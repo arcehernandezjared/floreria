@@ -349,7 +349,7 @@ async function registrarVentaLote(req, res) {
     if (!items || items.length === 0)
       return res.status(400).json({ success: false, message: 'Sin items' });
 
-    const descPct = parseFloat(descuento) || 0;
+    const descPct = Math.max(0, parseFloat(descuento) || 0);
 
     // Pre-verificar stock de todos los insumos necesarios antes de abrir transacción
     const stockNecesario = {};
@@ -446,7 +446,9 @@ async function registrarVentaPOS(req, res) {
       return res.status(400).json({ success: false, message: 'El carrito está vacío' });
     }
 
-    const descPct = parseFloat(descuento) || 0;
+    // Nunca permitir descuento negativo — evita que un total editado hacia arriba
+    // genere un markup involuntario en los precios registrados.
+    const descPct = Math.max(0, parseFloat(descuento) || 0);
 
     // ── Validar TODO el carrito antes de escribir nada ───────────────────────
     const stockNecesario = {};
