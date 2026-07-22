@@ -499,6 +499,17 @@ export default function RegistroVentasPage() {
     onError: (e) => toast.error(e.response?.data?.message || 'Error al revertir'),
   });
 
+  const fixMarkupMut = useMutation({
+    mutationFn: () => api.post('/ventas/fix-markup-hoy'),
+    onSuccess: (res) => {
+      const d = res.data;
+      qc.invalidateQueries(['registro-ventas']);
+      qc.invalidateQueries(['dashboard']);
+      toast.success(d.corregidas > 0 ? `${d.corregidas} ventas corregidas` : 'Sin ventas con markup');
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error'),
+  });
+
   const ventaManualMut = useMutation({
     mutationFn: (data) => api.post('/ventas/manual', data),
     onSuccess: () => {
@@ -532,9 +543,20 @@ export default function RegistroVentasPage() {
             <p className="text-gray-500 text-sm">Historial completo de ventas por período</p>
           </div>
         </div>
-        <button onClick={() => setModalManual(true)} className="btn-primary whitespace-nowrap">
-          <Plus size={15} /> Ingreso manual
-        </button>
+        <div className="flex items-center gap-2">
+          {hasta === hoy() && (
+            <button
+              onClick={() => fixMarkupMut.mutate()}
+              disabled={fixMarkupMut.isPending}
+              className="btn-secondary whitespace-nowrap text-xs text-yellow-400 border-yellow-500/30 hover:border-yellow-500/60"
+              title="Corregir ventas de hoy que tienen precio inflado por error">
+              {fixMarkupMut.isPending ? 'Corrigiendo...' : 'Corregir precios hoy'}
+            </button>
+          )}
+          <button onClick={() => setModalManual(true)} className="btn-primary whitespace-nowrap">
+            <Plus size={15} /> Ingreso manual
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
