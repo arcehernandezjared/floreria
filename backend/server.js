@@ -119,6 +119,7 @@ async function start() {
   await require('./src/controllers/catalogoController').ensureCanalPedido();
   await require('./src/controllers/catalogoController').ensureFormaPago();
   await require('./src/controllers/catalogoController').ensurePagoMixto();
+  await require('./src/controllers/catalogoController').fixMarkupVentasHoy();
   await require('./src/controllers/insumoController').ensureCodigoInsumos();
   await require('./src/controllers/insumoController').limpiarImagenesLocales();
   await require('./src/controllers/cierresController').ensureTable();

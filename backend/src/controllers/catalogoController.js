@@ -844,4 +844,25 @@ async function importarDesdePhp(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, ensurePagoMixto, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
+// Corrige ventas de hoy que quedaron con un markup involuntario (precio_venta > precio del catálogo).
+// Ocurre cuando descuento negativo fue enviado desde el POS con total editado hacia arriba.
+// Se puede correr múltiples veces de forma segura — solo actúa cuando precio_venta > precio_catalogo.
+async function fixMarkupVentasHoy() {
+  try {
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+    const result = await query(`
+      UPDATE ventas_floreria vf
+      JOIN catalogo c ON vf.catalogo_id = c.id
+      SET vf.precio_venta = c.precio_venta
+      WHERE DATE(CONVERT_TZ(vf.fecha, '+00:00', '-06:00')) = ?
+        AND vf.precio_venta > c.precio_venta * 1.005
+    `, [hoy]);
+    if (result.affectedRows > 0) {
+      logger.info(`fixMarkupVentasHoy: ${result.affectedRows} ventas corregidas — precio revertido al precio del catálogo`);
+    }
+  } catch (e) {
+    logger.warn(`fixMarkupVentasHoy: ${e.message}`);
+  }
+}
+
+module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, ensurePagoMixto, fixMarkupVentasHoy, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
