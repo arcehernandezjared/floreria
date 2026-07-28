@@ -298,8 +298,8 @@ function exportPDF(tab, data, periodo) {
   }
 
   if (tab === 'pedidos' && data) {
-    const fmtF = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CR') : '—';
-    const fmtFH = (d) => d ? new Date(d).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }) : '—';
+    const fmtF  = (d) => { if (!d) return '—'; const dt = new Date(String(d).substring(0,10) + 'T12:00:00'); return isNaN(dt) ? '—' : dt.toLocaleDateString('es-CR'); };
+    const fmtFH = (d) => { if (!d) return '—'; const dt = new Date(String(d).replace(' ', 'T')); return isNaN(dt) ? '—' : dt.toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }); };
     const activos   = data.filter(p => !p.eliminado_en);
     const eliminados = data.filter(p => p.eliminado_en);
     sectionTitle('Resumen');
@@ -451,8 +451,8 @@ function exportExcel(tab, data, periodo) {
   }
 
   if (tab === 'pedidos' && data) {
-    const fmtF = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CR') : '';
-    const fmtFH = (d) => d ? new Date(d).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }) : '';
+    const fmtF  = (d) => { if (!d) return ''; const dt = new Date(String(d).substring(0,10) + 'T12:00:00'); return isNaN(dt) ? '' : dt.toLocaleDateString('es-CR'); };
+    const fmtFH = (d) => { if (!d) return ''; const dt = new Date(String(d).replace(' ', 'T')); return isNaN(dt) ? '' : dt.toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }); };
     addSheet('Pedidos',
       ['#', 'Cliente', 'Telefono', 'Tipo arreglo', 'Items', 'Dedicatoria', 'Observaciones', 'Hora entrega', 'Direccion', 'Tributo', 'Precio (CRC)', 'Adelanto (CRC)', 'Saldo (CRC)', 'Pago', 'Entrega', 'Estado', 'Fecha pedido', 'Creado en', 'Eliminado', 'Fecha eliminacion'],
       data.map(p => [
@@ -795,8 +795,8 @@ function ReportePedidos({ data }) {
   const totalPrecio   = data.reduce((s, p) => s + parseFloat(p.precio || 0), 0);
   const totalAdelanto = data.reduce((s, p) => s + parseFloat(p.adelanto || 0), 0);
 
-  const fmtF  = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-  const fmtFH = (d) => d ? new Date(d).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  const fmtF  = (d) => { if (!d) return '—'; const dt = new Date(String(d).substring(0,10) + 'T12:00:00'); return isNaN(dt) ? '—' : dt.toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' }); };
+  const fmtFH = (d) => { if (!d) return '—'; const dt = new Date(String(d).replace(' ', 'T')); return isNaN(dt) ? '—' : dt.toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 
   return (
     <div className="space-y-5">

@@ -978,8 +978,8 @@ function HistorialPedidosModal({ onClose }) {
 
   const eliminados = pedidos.filter(p => p.eliminado_en).length;
 
-  const fmtFecha = (d) => d ? new Date(d).toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', year: 'numeric' }) : '';
-  const fmtFechaHora = (d) => d ? new Date(d).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const fmtFecha = (d) => { if (!d) return ''; const dt = new Date(String(d).substring(0,10) + 'T12:00:00'); return isNaN(dt) ? '—' : dt.toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' }); };
+  const fmtFechaHora = (d) => { if (!d) return ''; const dt = new Date(String(d).replace(' ', 'T')); return isNaN(dt) ? '—' : dt.toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
