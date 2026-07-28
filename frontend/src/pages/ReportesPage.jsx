@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart2, TrendingUp, Package, Trash2, DollarSign,
-  FileText, Sheet, Calendar, ChevronDown
+  FileText, Sheet, Calendar, ChevronDown, ClipboardList
 } from 'lucide-react';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import {
@@ -19,11 +19,19 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'ventas',      label: 'Ventas',      icon: TrendingUp  },
-  { id: 'inventario',  label: 'Inventario',  icon: Package     },
-  { id: 'mermas',      label: 'Mermas',      icon: Trash2      },
-  { id: 'financiero',  label: 'Financiero',  icon: DollarSign  },
+  { id: 'ventas',      label: 'Ventas',      icon: TrendingUp     },
+  { id: 'inventario',  label: 'Inventario',  icon: Package        },
+  { id: 'mermas',      label: 'Mermas',      icon: Trash2         },
+  { id: 'financiero',  label: 'Financiero',  icon: DollarSign     },
+  { id: 'pedidos',     label: 'Pedidos',     icon: ClipboardList  },
 ];
+
+const ESTADO_CLS_PEDIDO = {
+  pendiente: 'badge-yellow',
+  listo:     'badge-blue',
+  entregado: 'badge-green',
+  cancelado: 'badge-red',
+};
 
 const PRESETS = [
   { label: 'Este mes',        days: 0,   type: 'month'  },
@@ -115,7 +123,7 @@ function exportPDF(tab, data, periodo) {
   const W = doc.internal.pageSize.getWidth();
   const dateStr = new Date().toLocaleDateString('es-CR', { year: 'numeric', month: 'long', day: 'numeric' });
   const periodoStr = periodo ? `${periodo.desde} al ${periodo.hasta}` : 'Inventario actual';
-  const titles = { ventas: 'Reporte de Ventas', inventario: 'Reporte de Inventario', mermas: 'Reporte de Mermas', financiero: 'Reporte Financiero' };
+  const titles = { ventas: 'Reporte de Ventas', inventario: 'Reporte de Inventario', mermas: 'Reporte de Mermas', financiero: 'Reporte Financiero', pedidos: 'Reporte de Pedidos (Backup)' };
 
   // ─ Header ─
   doc.setFillColor(6, 78, 59);
@@ -289,6 +297,45 @@ function exportPDF(tab, data, periodo) {
     }
   }
 
+  if (tab === 'pedidos' && data) {
+    const fmtF = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CR') : '—';
+    const fmtFH = (d) => d ? new Date(d).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }) : '—';
+    const activos   = data.filter(p => !p.eliminado_en);
+    const eliminados = data.filter(p => p.eliminado_en);
+    sectionTitle('Resumen');
+    kpiRow([
+      { label: 'Total Pedidos', value: data.length },
+      { label: 'Activos',       value: activos.length },
+      { label: 'Eliminados',    value: eliminados.length },
+      { label: 'Total Precio',  value: fmtPDF(data.reduce((s, p) => s + parseFloat(p.precio || 0), 0)) },
+    ]);
+    if (eliminados.length > 0) {
+      sectionTitle(`Pedidos eliminados (${eliminados.length})`);
+      addTable(
+        ['#', 'Cliente', 'Tel', 'Tipo / Items', 'Precio', 'Adelanto', 'Estado previo', 'Fecha pedido', 'Eliminado el'],
+        eliminados.map(p => [
+          p.numero, p.cliente_nombre || '—', p.cliente_telefono || '—',
+          (p.items_resumen || p.tipo_arreglo || '—').substring(0, 50),
+          fmtPDF(p.precio), fmtPDF(p.adelanto), p.estado,
+          fmtF(p.fecha), fmtFH(p.eliminado_en),
+        ]),
+        { columnStyles: { 3: { cellWidth: 50 }, 8: { cellWidth: 35 } } }
+      );
+    }
+    sectionTitle(`Todos los pedidos (${data.length})`);
+    addTable(
+      ['#', 'Cliente', 'Tel', 'Tipo / Items', 'Fecha', 'Precio', 'Adelanto', 'Saldo', 'Estado'],
+      data.map(p => [
+        p.numero, p.cliente_nombre || '—', p.cliente_telefono || '—',
+        (p.items_resumen || p.tipo_arreglo || '—').substring(0, 40),
+        fmtF(p.fecha),
+        fmtPDF(p.precio), fmtPDF(p.adelanto),
+        fmtPDF(Math.max(0, parseFloat(p.precio || 0) - parseFloat(p.adelanto || 0))),
+        p.eliminado_en ? 'ELIMINADO' : p.estado,
+      ])
+    );
+  }
+
   // ─ Footer ─
   const pageCount = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -400,6 +447,36 @@ function exportExcel(tab, data, periodo) {
     }
     addSheet('Tendencia', ['Fecha', 'Ingresos (₡)'],
       (data.tendencia || []).map(d => [d.dia, parseFloat(d.ingresos)])
+    );
+  }
+
+  if (tab === 'pedidos' && data) {
+    const fmtF = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CR') : '';
+    const fmtFH = (d) => d ? new Date(d).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }) : '';
+    addSheet('Pedidos',
+      ['#', 'Cliente', 'Telefono', 'Tipo arreglo', 'Items', 'Dedicatoria', 'Observaciones', 'Hora entrega', 'Direccion', 'Tributo', 'Precio (CRC)', 'Adelanto (CRC)', 'Saldo (CRC)', 'Pago', 'Entrega', 'Estado', 'Fecha pedido', 'Creado en', 'Eliminado', 'Fecha eliminacion'],
+      data.map(p => [
+        p.numero,
+        p.cliente_nombre || '',
+        p.cliente_telefono || '',
+        p.tipo_arreglo || '',
+        p.items_resumen || '',
+        p.dedicatoria || '',
+        p.observaciones || '',
+        p.hora_entrega || '',
+        p.direccion || '',
+        p.tributo_numero || '',
+        parseFloat(p.precio || 0),
+        parseFloat(p.adelanto || 0),
+        Math.max(0, parseFloat(p.precio || 0) - parseFloat(p.adelanto || 0)),
+        p.tipo_pago || '',
+        p.tipo_entrega || '',
+        p.eliminado_en ? 'ELIMINADO' : p.estado,
+        fmtF(p.fecha),
+        fmtFH(p.created_at),
+        p.eliminado_en ? 'Sí' : 'No',
+        fmtFH(p.eliminado_en),
+      ])
     );
   }
 
@@ -709,6 +786,126 @@ function ReporteFinanciero({ data }) {
   );
 }
 
+// ── Reporte Pedidos (backup) ──────────────────────────────────────────────────
+function ReportePedidos({ data }) {
+  if (!data) return <Empty />;
+
+  const activos    = data.filter(p => !p.eliminado_en);
+  const eliminados = data.filter(p => p.eliminado_en);
+  const totalPrecio   = data.reduce((s, p) => s + parseFloat(p.precio || 0), 0);
+  const totalAdelanto = data.reduce((s, p) => s + parseFloat(p.adelanto || 0), 0);
+
+  const fmtF  = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const fmtFH = (d) => d ? new Date(d).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi title="Total Pedidos"  value={data.length}            sub="en el período"             color="#10b981" />
+        <Kpi title="Activos"        value={activos.length}         sub="en el sistema"             color="#3b82f6" />
+        <Kpi title="Eliminados"     value={eliminados.length}      sub="recuperados del backup"    color="#ef4444" />
+        <Kpi title="Total Precio"   value={formatMoney(totalPrecio)} sub={`Adelantos: ${formatMoney(totalAdelanto)}`} color="#8b5cf6" />
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between flex-wrap gap-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Registro completo de pedidos</p>
+          <div className="flex gap-3 text-xs">
+            <span className="text-gray-400">{activos.length} activos</span>
+            {eliminados.length > 0 && <span className="text-red-400 font-medium">{eliminados.length} eliminados</span>}
+          </div>
+        </div>
+
+        {/* Móvil: tarjetas */}
+        <div className="card-view">
+          {data.length === 0 && <p className="text-gray-600 text-sm text-center py-8">Sin pedidos en el período</p>}
+          <div className="divide-y divide-gray-800/60">
+            {data.map(p => (
+              <div key={p.id} className={`px-4 py-3 ${p.eliminado_en ? 'bg-red-500/5' : ''}`}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-white font-bold text-sm">#{p.numero}</span>
+                    <span className="text-gray-200 text-sm">{p.cliente_nombre || '(sin nombre)'}</span>
+                  </div>
+                  {p.eliminado_en
+                    ? <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-full px-2 py-0.5 whitespace-nowrap flex-shrink-0">ELIMINADO</span>
+                    : <span className={`badge text-xs flex-shrink-0 ${ESTADO_CLS_PEDIDO[p.estado] || 'badge-yellow'}`}>{p.estado}</span>
+                  }
+                </div>
+                {p.tipo_arreglo && <p className="text-gray-400 text-xs">{p.tipo_arreglo}</p>}
+                {p.items_resumen && <p className="text-gray-500 text-xs break-words">Items: {p.items_resumen}</p>}
+                {p.cliente_telefono && <p className="text-gray-500 text-xs">Tel: {p.cliente_telefono}</p>}
+                {p.hora_entrega && <p className="text-gray-500 text-xs">Hora: {p.hora_entrega}</p>}
+                {p.direccion && <p className="text-gray-500 text-xs break-words">Dir: {p.direccion}</p>}
+                {p.dedicatoria && <p className="text-gray-500 text-xs break-words italic">"{p.dedicatoria}"</p>}
+                {p.observaciones && <p className="text-gray-500 text-xs break-words">Obs: {p.observaciones}</p>}
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
+                  <span className="text-emerald-400 font-semibold text-xs">{formatMoney(p.precio)}</span>
+                  <span className="text-gray-500 text-xs">Adelanto: {formatMoney(p.adelanto)}</span>
+                  <span className="text-gray-600 text-xs">Saldo: {formatMoney(Math.max(0, parseFloat(p.precio||0) - parseFloat(p.adelanto||0)))}</span>
+                  <span className="text-gray-600 text-xs">Fecha: {fmtF(p.fecha)}</span>
+                </div>
+                {p.eliminado_en && (
+                  <p className="text-red-400/70 text-xs mt-1.5 pt-1.5 border-t border-red-500/10">
+                    Eliminado el {fmtFH(p.eliminado_en)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: tabla */}
+        <div className="table-view overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="border-b border-gray-800">
+              <tr>
+                {['#', 'Cliente', 'Tel', 'Tipo / Items / Detalles', 'Fecha', 'Precio', 'Adelanto', 'Saldo', 'Estado'].map(c => (
+                  <th key={c} className="th text-xs">{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.length === 0 && (
+                <tr><td colSpan={9} className="td text-center text-gray-600 py-8">Sin pedidos en el período</td></tr>
+              )}
+              {data.map(p => (
+                <tr key={p.id} className={`table-row ${p.eliminado_en ? 'bg-red-500/5' : ''}`}>
+                  <td className="td font-mono font-bold text-white whitespace-nowrap">#{p.numero}</td>
+                  <td className="td">
+                    <p className="text-white font-medium">{p.cliente_nombre || '—'}</p>
+                    {p.cliente_telefono && <p className="text-gray-500 text-xs">{p.cliente_telefono}</p>}
+                  </td>
+                  <td className="td text-gray-400 whitespace-nowrap">{p.cliente_telefono || '—'}</td>
+                  <td className="td" style={{ maxWidth: '280px', minWidth: '160px' }}>
+                    {p.tipo_arreglo && <p className="text-gray-300 font-medium">{p.tipo_arreglo}</p>}
+                    {p.items_resumen && <p className="text-gray-500 break-words mt-0.5">{p.items_resumen}</p>}
+                    {p.hora_entrega && <p className="text-gray-600 mt-0.5">Hora: {p.hora_entrega}</p>}
+                    {p.direccion && <p className="text-gray-600 break-words mt-0.5">Dir: {p.direccion}</p>}
+                    {p.dedicatoria && <p className="text-gray-600 italic break-words mt-0.5">"{p.dedicatoria}"</p>}
+                    {p.observaciones && <p className="text-gray-600 break-words mt-0.5">Obs: {p.observaciones}</p>}
+                    {p.eliminado_en && <p className="text-red-400/70 mt-1 pt-1 border-t border-red-500/10">Eliminado: {fmtFH(p.eliminado_en)}</p>}
+                  </td>
+                  <td className="td text-gray-400 whitespace-nowrap">{fmtF(p.fecha)}</td>
+                  <td className="td text-emerald-400 font-semibold whitespace-nowrap">{formatMoney(p.precio)}</td>
+                  <td className="td text-gray-400 whitespace-nowrap">{formatMoney(p.adelanto)}</td>
+                  <td className="td text-gray-500 whitespace-nowrap">{formatMoney(Math.max(0, parseFloat(p.precio||0) - parseFloat(p.adelanto||0)))}</td>
+                  <td className="td">
+                    {p.eliminado_en
+                      ? <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-full px-2 py-0.5 whitespace-nowrap">ELIMINADO</span>
+                      : <span className={`badge text-xs ${ESTADO_CLS_PEDIDO[p.estado] || 'badge-yellow'}`}>{p.estado}</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Componentes helper ────────────────────────────────────────────────────────
 function Tabla({ title, cols, rows }) {
   return (
@@ -785,13 +982,14 @@ export default function ReportesPage() {
 
   const params = range ? { desde: range.desde, hasta: range.hasta } : {};
 
-  const { data: ventasData, isFetching: fV } = useQuery({ queryKey: ['rep-ventas', params], queryFn: () => api.get('/reportes/ventas', { params }).then(r => r.data.data), enabled: tab === 'ventas' && !!range });
-  const { data: invData,    isFetching: fI } = useQuery({ queryKey: ['rep-inventario'],       queryFn: () => api.get('/reportes/inventario').then(r => r.data.data),                  enabled: tab === 'inventario' });
-  const { data: mermasData, isFetching: fM } = useQuery({ queryKey: ['rep-mermas', params],   queryFn: () => api.get('/reportes/mermas', { params }).then(r => r.data.data),           enabled: tab === 'mermas' && !!range });
-  const { data: finData,    isFetching: fF } = useQuery({ queryKey: ['rep-financiero', params],queryFn: () => api.get('/reportes/financiero', { params }).then(r => r.data.data),       enabled: tab === 'financiero' && !!range });
+  const { data: ventasData,  isFetching: fV } = useQuery({ queryKey: ['rep-ventas', params],     queryFn: () => api.get('/reportes/ventas', { params }).then(r => r.data.data),      enabled: tab === 'ventas' && !!range });
+  const { data: invData,     isFetching: fI } = useQuery({ queryKey: ['rep-inventario'],           queryFn: () => api.get('/reportes/inventario').then(r => r.data.data),             enabled: tab === 'inventario' });
+  const { data: mermasData,  isFetching: fM } = useQuery({ queryKey: ['rep-mermas', params],      queryFn: () => api.get('/reportes/mermas', { params }).then(r => r.data.data),      enabled: tab === 'mermas' && !!range });
+  const { data: finData,     isFetching: fF } = useQuery({ queryKey: ['rep-financiero', params],  queryFn: () => api.get('/reportes/financiero', { params }).then(r => r.data.data),  enabled: tab === 'financiero' && !!range });
+  const { data: pedidosData, isFetching: fP } = useQuery({ queryKey: ['rep-pedidos', params],     queryFn: () => api.get('/pedidos/historial', { params: range ? { desde: range.desde, hasta: range.hasta } : {} }).then(r => r.data.data), enabled: tab === 'pedidos' });
 
-  const activeData = { ventas: ventasData, inventario: invData, mermas: mermasData, financiero: finData }[tab];
-  const isFetching = fV || fI || fM || fF;
+  const activeData = { ventas: ventasData, inventario: invData, mermas: mermasData, financiero: finData, pedidos: pedidosData }[tab];
+  const isFetching = fV || fI || fM || fF || fP;
 
   const handleExportPDF   = () => exportPDF(tab, activeData, range);
   const handleExportExcel = () => exportExcel(tab, activeData, range);
@@ -885,6 +1083,7 @@ export default function ReportesPage() {
         {tab === 'inventario' && <ReporteInventario data={invData} />}
         {tab === 'mermas'     && <ReporteMermas     data={mermasData} />}
         {tab === 'financiero' && <ReporteFinanciero data={finData} />}
+        {tab === 'pedidos'    && <ReportePedidos    data={pedidosData} />}
       </motion.div>
     </div>
   );

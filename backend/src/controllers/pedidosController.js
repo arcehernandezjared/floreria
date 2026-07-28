@@ -412,6 +412,13 @@ async function deletePedido(req, res) {
 
 async function getHistorialPedidos(req, res) {
   try {
+    const { desde, hasta } = req.query;
+    const params = [];
+    let where = '';
+    if (desde && hasta) {
+      where = 'WHERE p.fecha BETWEEN ? AND ?';
+      params.push(desde, hasta);
+    }
     const pedidos = await query(`
       SELECT p.*,
         GROUP_CONCAT(
@@ -420,10 +427,11 @@ async function getHistorialPedidos(req, res) {
         ) AS items_resumen
       FROM pedidos p
       LEFT JOIN pedido_items pi ON pi.pedido_id = p.id
+      ${where}
       GROUP BY p.id
-      ORDER BY COALESCE(p.eliminado_en, p.created_at) DESC
-      LIMIT 500
-    `);
+      ORDER BY p.fecha DESC, p.id DESC
+      LIMIT 1000
+    `, params);
     res.json({ success: true, data: pedidos });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
