@@ -25,6 +25,7 @@ async function ensureTable() {
   // Migración: agregar columna si la tabla ya existía sin ella
   await addColumnIfMissing('pedidos', 'adelanto_original', 'DECIMAL(12,2) DEFAULT NULL');
   await addColumnIfMissing('pedidos', 'ventas_registradas', 'TINYINT(1) DEFAULT 0');
+  await addColumnIfMissing('pedidos', 'eliminado_en', 'DATETIME NULL DEFAULT NULL');
   await query(`CREATE TABLE IF NOT EXISTS pedido_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
     pedido_id INT NOT NULL,
@@ -60,7 +61,9 @@ async function getPedidos(req, res) {
     const rows = await query(`
       SELECT p.*,
         (SELECT COUNT(*) FROM pedido_items pi WHERE pi.pedido_id = p.id) as total_items
-      FROM pedidos p ORDER BY p.created_at DESC LIMIT 200`);
+      FROM pedidos p
+      WHERE p.eliminado_en IS NULL
+      ORDER BY p.created_at DESC LIMIT 200`);
     res.json({ success: true, data: rows });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
@@ -391,9 +394,37 @@ async function updateEstado(req, res) {
 
 async function deletePedido(req, res) {
   try {
-    await query('DELETE FROM pedido_items WHERE pedido_id = ?', [req.params.id]);
-    await query('DELETE FROM pedidos WHERE id = ?', [req.params.id]);
+    const pedido = await queryOne('SELECT * FROM pedidos WHERE id = ?', [req.params.id]);
+    if (!pedido) return res.status(404).json({ success: false, message: 'Pedido no encontrado' });
+    await transaction(async (conn) => {
+      await conn.query('UPDATE pedidos SET eliminado_en = NOW() WHERE id = ?', [req.params.id]);
+      await registrarMovimiento(conn, req.params.id, 'cambio_estado', {
+        estadoAnterior: pedido.estado,
+        estadoNuevo: 'eliminado',
+        descripcion: `Pedido eliminado del sistema (estado previo: ${pedido.estado})`
+      });
+    });
     res.json({ success: true, message: 'Pedido eliminado' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+async function getHistorialPedidos(req, res) {
+  try {
+    const pedidos = await query(`
+      SELECT p.*,
+        GROUP_CONCAT(
+          CONCAT(pi.nombre, ' x', pi.cantidad)
+          ORDER BY pi.id SEPARATOR ', '
+        ) AS items_resumen
+      FROM pedidos p
+      LEFT JOIN pedido_items pi ON pi.pedido_id = p.id
+      GROUP BY p.id
+      ORDER BY COALESCE(p.eliminado_en, p.created_at) DESC
+      LIMIT 500
+    `);
+    res.json({ success: true, data: pedidos });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -538,4 +569,4 @@ async function getMovimientos(req, res) {
   }
 }
 
-module.exports = { ensureTable, getPedidos, getPedido, createPedido, updatePedido, updateEstado, deletePedido, abonarPedido, getMovimientos, getMovimientosGlobal, getReporteMes };
+module.exports = { ensureTable, getPedidos, getPedido, createPedido, updatePedido, updateEstado, deletePedido, abonarPedido, getMovimientos, getMovimientosGlobal, getReporteMes, getHistorialPedidos };

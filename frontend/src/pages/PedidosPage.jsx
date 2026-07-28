@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Printer, Edit, Trash2, X, Clock, Package,
   CheckCircle, XCircle, Search, ChevronDown, Flower2,
-  Wallet, History, Banknote, CreditCard, Smartphone, PlusCircle, FileText
+  Wallet, History, Banknote, CreditCard, Smartphone, PlusCircle, FileText, Archive
 } from 'lucide-react';
 import api, { formatMoney, hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
@@ -955,6 +955,117 @@ function generarPDFReporteMes(data) {
   doc.save(`reporte-pedidos-${mes}.pdf`);
 }
 
+function HistorialPedidosModal({ onClose }) {
+  const [busqueda, setBusqueda] = useState('');
+  const [filtro, setFiltro] = useState('todos');
+
+  const { data: pedidos = [], isLoading } = useQuery({
+    queryKey: ['historial-pedidos'],
+    queryFn: () => api.get('/pedidos/historial').then(r => r.data.data),
+    staleTime: 0,
+  });
+
+  const filtrados = useMemo(() => pedidos.filter(p => {
+    const matchFiltro = filtro === 'todos' ||
+      (filtro === 'eliminados' && p.eliminado_en) ||
+      (filtro === 'activos' && !p.eliminado_en);
+    const matchBusq = !busqueda ||
+      (p.cliente_nombre || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+      (p.numero || '').includes(busqueda) ||
+      (p.tipo_arreglo || '').toLowerCase().includes(busqueda.toLowerCase());
+    return matchFiltro && matchBusq;
+  }), [pedidos, filtro, busqueda]);
+
+  const eliminados = pedidos.filter(p => p.eliminado_en).length;
+
+  const fmtFecha = (d) => d ? new Date(d).toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', year: 'numeric' }) : '';
+  const fmtFechaHora = (d) => d ? new Date(d).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center p-4 pt-6 pb-8">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+          className="card w-full max-w-3xl">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Archive size={18} className="text-brand-400" />
+              <h3 className="text-lg font-semibold text-white">Historial de Pedidos</h3>
+              {eliminados > 0 && (
+                <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-full px-2 py-0.5">
+                  {eliminados} eliminados
+                </span>
+              )}
+            </div>
+            <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-4">
+            <div className="relative flex-1 min-w-40">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input className="input pl-8 w-full text-sm" placeholder="Buscar cliente, número o tipo..."
+                value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+            </div>
+            <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1">
+              {[['todos','Todos'],['activos','Activos'],['eliminados','Eliminados']].map(([k,l]) => (
+                <button key={k} onClick={() => setFiltro(k)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                    filtro === k ? 'bg-brand-600/20 text-brand-400 border border-brand-600/30' : 'text-gray-400 hover:text-white'
+                  }`}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-gray-600 text-xs mb-3">{filtrados.length} de {pedidos.length} pedidos — los eliminados permanecen aquí siempre</p>
+
+          {isLoading && <p className="text-gray-500 text-sm text-center py-8">Cargando historial...</p>}
+
+          <div className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
+            {filtrados.map(p => (
+              <div key={p.id} className={`rounded-xl p-3 border ${
+                p.eliminado_en ? 'bg-red-500/5 border-red-500/20' : 'bg-gray-800/40 border-gray-700/30'
+              }`}>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className="text-white font-bold text-sm">#{p.numero}</span>
+                      <span className="text-gray-200 text-sm">{p.cliente_nombre || '(sin nombre)'}</span>
+                      {p.eliminado_en
+                        ? <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-full px-2 py-0.5 font-medium">ELIMINADO</span>
+                        : <span className={`badge text-xs ${ESTADO[p.estado]?.cls || 'badge-yellow'}`}>{ESTADO[p.estado]?.label || p.estado}</span>
+                      }
+                    </div>
+                    {p.tipo_arreglo && <p className="text-gray-400 text-xs">{p.tipo_arreglo}</p>}
+                    {p.items_resumen && <p className="text-gray-500 text-xs mt-0.5 break-words">Items: {p.items_resumen}</p>}
+                    {p.cliente_telefono && <p className="text-gray-500 text-xs mt-0.5">Tel: {p.cliente_telefono}</p>}
+                    {p.dedicatoria && <p className="text-gray-500 text-xs mt-0.5 break-words">Dedicatoria: {p.dedicatoria}</p>}
+                    {p.observaciones && <p className="text-gray-500 text-xs mt-0.5 break-words">Obs: {p.observaciones}</p>}
+                    {p.eliminado_en && (
+                      <p className="text-red-400/70 text-xs mt-1.5 pt-1.5 border-t border-red-500/10">
+                        Eliminado el {fmtFechaHora(p.eliminado_en)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-emerald-400 font-semibold text-sm">{formatMoney(p.precio)}</p>
+                    <p className="text-gray-500 text-xs">Adelanto: {formatMoney(p.adelanto)}</p>
+                    {p.precio > 0 && (
+                      <p className="text-gray-600 text-xs">Saldo: {formatMoney(Math.max(0, p.precio - p.adelanto))}</p>
+                    )}
+                    <p className="text-gray-600 text-xs mt-1">{fmtFecha(p.created_at)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {filtrados.length === 0 && !isLoading && (
+              <p className="text-gray-600 text-xs text-center py-8">Sin resultados</p>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
 function ReporteMesModal({ onClose }) {
   const mesActual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }).substring(0, 7);
   const [mes, setMes] = useState(mesActual);
@@ -965,9 +1076,10 @@ function ReporteMesModal({ onClose }) {
   });
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        className="card w-full max-w-2xl my-4">
+    <div className="fixed inset-0 bg-black/70 z-50 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center p-4 pt-6 pb-8">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+          className="card w-full max-w-2xl">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <FileText size={18} className="text-brand-400" />
@@ -1069,6 +1181,7 @@ function ReporteMesModal({ onClose }) {
           </div>
         )}
       </motion.div>
+      </div>
     </div>
   );
 }
@@ -1084,6 +1197,7 @@ export default function PedidosPage() {
   const [verMovimientos, setVerMovimientos] = useState(null);
   const [verMovimientosGlobal, setVerMovimientosGlobal] = useState(false);
   const [verReporte, setVerReporte] = useState(false);
+  const [verHistorial, setVerHistorial] = useState(false);
 
   const { data: pedidos = [] } = useQuery({
     queryKey: ['pedidos'],
@@ -1170,6 +1284,9 @@ export default function PedidosPage() {
           <p className="text-gray-500 text-sm mt-0.5">Órdenes de pedido de clientes</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setVerHistorial(true)} className="btn-secondary">
+            <Archive size={16} /> Historial
+          </button>
           <button onClick={() => setVerReporte(true)} className="btn-secondary">
             <FileText size={16} /> Reporte mes
           </button>
@@ -1237,6 +1354,9 @@ export default function PedidosPage() {
         )}
         {verReporte && (
           <ReporteMesModal onClose={() => setVerReporte(false)} />
+        )}
+        {verHistorial && (
+          <HistorialPedidosModal onClose={() => setVerHistorial(false)} />
         )}
       </AnimatePresence>
 
