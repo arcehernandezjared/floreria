@@ -6,6 +6,7 @@ router.use(authMiddleware);
 
 router.get('/',          ctrl.getPedidos);
 router.get('/movimientos', ctrl.getMovimientosGlobal);
+router.get('/reporte-mes', ctrl.getReporteMes);
 router.get('/:id',       ctrl.getPedido);
 router.get('/:id/movimientos', ctrl.getMovimientos);
 router.post('/',         ctrl.createPedido);

@@ -463,6 +463,69 @@ async function getMovimientosGlobal(req, res) {
   }
 }
 
+async function getReporteMes(req, res) {
+  try {
+    const { mes } = req.query; // formato YYYY-MM, default mes actual CR
+    const now   = new Date();
+    const mesRef = mes || now.toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }).substring(0, 7);
+    const desde = `${mesRef}-01`;
+    const hasta = `${mesRef}-31`;
+
+    // 1. Pedidos activos del mes
+    const pedidos = await query(
+      `SELECT p.*,
+              GROUP_CONCAT(
+                CONCAT(pi.nombre,' x',pi.cantidad,' (',pi.tipo,')')
+                ORDER BY pi.id SEPARATOR ' | '
+              ) AS items_resumen
+       FROM pedidos p
+       LEFT JOIN pedido_items pi ON pi.pedido_id = p.id
+       WHERE p.fecha BETWEEN ? AND ?
+       GROUP BY p.id
+       ORDER BY p.fecha ASC, p.id ASC`,
+      [desde, hasta]
+    );
+
+    // 2. TODOS los movimientos del mes, incluyendo de pedidos eliminados (LEFT JOIN)
+    const movimientos = await query(
+      `SELECT pm.*,
+              p.numero      AS pedido_numero,
+              p.cliente_nombre AS pedido_cliente,
+              p.tipo_arreglo   AS pedido_tipo
+       FROM pedido_movimientos pm
+       LEFT JOIN pedidos p ON pm.pedido_id = p.id
+       WHERE pm.fecha >= ? AND pm.fecha < DATE_ADD(?, INTERVAL 1 MONTH)
+       ORDER BY pm.fecha ASC`,
+      [desde, desde]
+    );
+
+    // 3. Movimientos huérfanos = del pedido borrado (no hay pedido en la tabla)
+    const huerfanos = movimientos.filter(m => !m.pedido_numero);
+
+    // 4. Ventas con canal='pedido' del mes (trazas de adelantos/saldos)
+    const ventasPedido = await query(
+      `SELECT v.id, v.nombre_arreglo, v.precio_venta, v.nombre_cliente, v.notas,
+              CONVERT_TZ(v.fecha,'+00:00','-06:00') as fecha_cr, v.forma_pago
+       FROM ventas_floreria v
+       WHERE v.canal = 'pedido'
+         AND DATE(CONVERT_TZ(v.fecha,'+00:00','-06:00')) BETWEEN ? AND ?
+       ORDER BY v.fecha ASC`,
+      [desde, hasta]
+    );
+
+    res.json({
+      success: true,
+      mes: mesRef,
+      pedidos,
+      movimientos,
+      huerfanos,
+      ventasPedido,
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
 async function getMovimientos(req, res) {
   try {
     const movimientos = await query(
@@ -475,4 +538,4 @@ async function getMovimientos(req, res) {
   }
 }
 
-module.exports = { ensureTable, getPedidos, getPedido, createPedido, updatePedido, updateEstado, deletePedido, abonarPedido, getMovimientos, getMovimientosGlobal };
+module.exports = { ensureTable, getPedidos, getPedido, createPedido, updatePedido, updateEstado, deletePedido, abonarPedido, getMovimientos, getMovimientosGlobal, getReporteMes };

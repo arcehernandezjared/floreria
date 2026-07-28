@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Printer, Edit, Trash2, X, Clock, Package,
   CheckCircle, XCircle, Search, ChevronDown, Flower2,
-  Wallet, History, Banknote, CreditCard, Smartphone, PlusCircle
+  Wallet, History, Banknote, CreditCard, Smartphone, PlusCircle, FileText
 } from 'lucide-react';
 import api, { formatMoney, hoyCR } from '../utils/api';
 import toast from 'react-hot-toast';
@@ -841,6 +841,238 @@ function PedidoCard({ p, onEdit, onDelete, onEstado, onAbonar, onMovimientos }) 
   );
 }
 
+// ── Reporte del mes ───────────────────────────────────────────────────────────
+function generarPDFReporteMes(data) {
+  const { mes, pedidos, movimientos, huerfanos, ventasPedido } = data;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210; const M = 14; const R = W - M;
+  let y = 16;
+  const tz = { timeZone: 'America/Costa_Rica' };
+
+  const fmtM = (n) => `CRC ${Number(n || 0).toLocaleString('es-CR', { minimumFractionDigits: 0 })}`;
+  const fmtF = (f) => f ? new Date(f).toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit', year: 'numeric', ...tz }) : '';
+  const fmtFH = (f) => f ? new Date(f).toLocaleString('es-CR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', ...tz }) : '';
+  const line = () => { doc.setDrawColor(200); doc.line(M, y, R, y); y += 4; };
+  const nl = (n = 4) => { y += n; if (y > 270) { doc.addPage(); y = 16; } };
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+  doc.text('REPORTE DE PEDIDOS DEL MES', M, y); y += 6;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(`Período: ${mes}  |  Generado: ${new Date().toLocaleString('es-CR', tz)}`, M, y);
+  doc.setTextColor(0); nl(6);
+
+  // ── Sección 1: Pedidos activos ────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+  doc.text(`PEDIDOS DEL MES (${pedidos.length})`, M, y); nl(2); line();
+
+  if (pedidos.length === 0) {
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(9);
+    doc.text('Sin pedidos registrados este mes.', M, y); nl(6);
+  }
+
+  pedidos.forEach((p, i) => {
+    if (y > 255) { doc.addPage(); y = 16; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    doc.text(`#${p.numero || p.id}  ${p.cliente_nombre || 'Sin nombre'}`, M, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${p.estado?.toUpperCase() || ''}`, R - 20, y, { align: 'right' });
+    nl(4);
+    doc.setFontSize(8); doc.setTextColor(80);
+    doc.text(`Fecha entrega: ${fmtF(p.fecha)}  |  Hora: ${p.hora_entrega || '-'}  |  Tel: ${p.cliente_telefono || '-'}`, M + 2, y); nl(3.5);
+    if (p.tipo_arreglo) { doc.text(`Arreglo: ${p.tipo_arreglo}`, M + 2, y); nl(3.5); }
+    if (p.items_resumen) { doc.text(`Items: ${p.items_resumen}`, M + 2, y); nl(3.5); }
+    doc.text(`Precio: ${fmtM(p.precio)}  |  Adelanto: ${fmtM(p.adelanto)}  |  Saldo: ${fmtM((p.precio || 0) - (p.adelanto || 0))}`, M + 2, y);
+    doc.setTextColor(0); nl(4);
+    if (p.dedicatoria) { doc.setFontSize(8); doc.setTextColor(80); doc.text(`Dedicatoria: ${p.dedicatoria}`, M + 2, y); doc.setTextColor(0); nl(3.5); }
+    if (p.observaciones) { doc.setFontSize(8); doc.setTextColor(80); doc.text(`Obs: ${p.observaciones}`, M + 2, y); doc.setTextColor(0); nl(3.5); }
+    if (i < pedidos.length - 1) { doc.setDrawColor(230); doc.line(M, y, R, y); y += 3; doc.setDrawColor(200); }
+  });
+
+  // ── Sección 2: Pedidos eliminados (huérfanos) ────────────────────────────
+  nl(4);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(180, 60, 60);
+  doc.text(`PEDIDOS ELIMINADOS ESTE MES (registros recuperados: ${huerfanos.length})`, M, y);
+  doc.setTextColor(0); nl(2); line();
+
+  if (huerfanos.length === 0) {
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(80);
+    doc.text('No se encontraron movimientos de pedidos eliminados.', M, y); doc.setTextColor(0); nl(6);
+  } else {
+    doc.setFontSize(9); doc.setTextColor(80);
+    doc.text('Los siguientes movimientos corresponden a pedidos que ya no existen en el sistema:', M, y); doc.setTextColor(0); nl(4);
+    huerfanos.forEach(m => {
+      if (y > 265) { doc.addPage(); y = 16; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+      doc.text(`ID Pedido #${m.pedido_id}  —  ${m.tipo}  —  ${fmtFH(m.fecha)}`, M + 2, y); nl(3.5);
+      doc.setFont('helvetica', 'normal');
+      if (m.descripcion) { doc.text(`  ${m.descripcion}`, M + 2, y); nl(3.5); }
+      if (m.monto) { doc.text(`  Monto: ${fmtM(m.monto)}`, M + 2, y); nl(3.5); }
+    });
+  }
+
+  // ── Sección 3: Trazas en ventas (adelantos/saldos) ───────────────────────
+  nl(2);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+  doc.text(`COBROS REGISTRADOS EN VENTAS (canal pedido: ${ventasPedido.length})`, M, y); nl(2); line();
+
+  if (ventasPedido.length === 0) {
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(80);
+    doc.text('Sin cobros de pedidos registrados este mes.', M, y); doc.setTextColor(0); nl(6);
+  } else {
+    doc.setFontSize(8);
+    ventasPedido.forEach(v => {
+      if (y > 270) { doc.addPage(); y = 16; }
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${fmtFH(v.fecha_cr)}  ${v.nombre_arreglo || ''}`, M + 2, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(fmtM(v.precio_venta), R, y, { align: 'right' }); nl(3.5);
+      doc.setTextColor(80);
+      doc.text(`  Cliente: ${v.nombre_cliente || '-'}  |  Ref: ${v.notas || '-'}  |  Pago: ${v.forma_pago || '-'}`, M + 2, y);
+      doc.setTextColor(0); nl(4);
+    });
+  }
+
+  // ── Movimientos completos ─────────────────────────────────────────────────
+  nl(2);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+  doc.text(`TODOS LOS MOVIMIENTOS DEL MES (${movimientos.length})`, M, y); nl(2); line();
+
+  doc.setFontSize(8);
+  movimientos.forEach(m => {
+    if (y > 270) { doc.addPage(); y = 16; }
+    const num = m.pedido_numero ? `#${m.pedido_numero}` : `(eliminado ID:${m.pedido_id})`;
+    const cliente = m.pedido_cliente ? ` — ${m.pedido_cliente}` : '';
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(m.pedido_numero ? 0 : 150);
+    doc.text(`${fmtFH(m.fecha)}  ${num}${cliente}`, M + 2, y);
+    doc.setFont('helvetica', 'normal');
+    if (m.monto) doc.text(fmtM(m.monto), R, y, { align: 'right' });
+    nl(3.5); doc.setTextColor(80);
+    doc.text(`  ${m.tipo}${m.descripcion ? ' — ' + m.descripcion : ''}${m.estado_nuevo ? ' → ' + m.estado_nuevo : ''}`, M + 2, y);
+    doc.setTextColor(0); nl(3.5);
+  });
+
+  doc.save(`reporte-pedidos-${mes}.pdf`);
+}
+
+function ReporteMesModal({ onClose }) {
+  const mesActual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }).substring(0, 7);
+  const [mes, setMes] = useState(mesActual);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['reporte-pedidos-mes', mes],
+    queryFn: () => api.get(`/pedidos/reporte-mes?mes=${mes}`).then(r => r.data),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="card w-full max-w-2xl my-4">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <FileText size={18} className="text-brand-400" />
+            <h3 className="text-lg font-semibold text-white">Reporte de Pedidos del Mes</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
+
+        <div className="flex items-center gap-3 mb-5">
+          <label className="label mb-0 whitespace-nowrap">Mes:</label>
+          <input type="month" className="input w-44" value={mes} onChange={e => setMes(e.target.value)} />
+          {data && (
+            <button onClick={() => generarPDFReporteMes(data)} className="btn-primary ml-auto">
+              <Printer size={15} /> Descargar PDF
+            </button>
+          )}
+        </div>
+
+        {isLoading && <p className="text-gray-500 text-sm text-center py-8">Cargando reporte...</p>}
+        {isError  && <p className="text-red-400 text-sm text-center py-8">Error al cargar el reporte</p>}
+
+        {data && (
+          <div className="space-y-5 text-sm">
+            {/* Resumen */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="card bg-gray-800/50 text-center">
+                <p className="text-2xl font-bold text-white">{data.pedidos.length}</p>
+                <p className="text-xs text-gray-500">Pedidos activos</p>
+              </div>
+              <div className="card bg-red-500/10 text-center border-red-500/20">
+                <p className="text-2xl font-bold text-red-400">{data.huerfanos.length}</p>
+                <p className="text-xs text-gray-500">Pedidos eliminados</p>
+              </div>
+              <div className="card bg-emerald-500/10 text-center border-emerald-500/20">
+                <p className="text-2xl font-bold text-emerald-400">
+                  {formatMoney(data.ventasPedido.reduce((s, v) => s + parseFloat(v.precio_venta || 0), 0))}
+                </p>
+                <p className="text-xs text-gray-500">Cobrado este mes</p>
+              </div>
+            </div>
+
+            {/* Pedidos eliminados */}
+            {data.huerfanos.length > 0 && (
+              <div>
+                <p className="text-red-400 font-semibold mb-2">⚠ Movimientos de pedidos eliminados</p>
+                <div className="space-y-2">
+                  {data.huerfanos.map(m => (
+                    <div key={m.id} className="bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+                      <p className="text-white font-medium text-xs">ID Pedido #{m.pedido_id} — {m.tipo}</p>
+                      {m.descripcion && <p className="text-gray-400 text-xs mt-0.5">{m.descripcion}</p>}
+                      {m.monto && <p className="text-emerald-400 text-xs mt-0.5">{formatMoney(m.monto)}</p>}
+                      <p className="text-gray-600 text-xs mt-0.5">{new Date(m.fecha).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' })}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Trazas en ventas */}
+            {data.ventasPedido.length > 0 && (
+              <div>
+                <p className="text-brand-400 font-semibold mb-2">Cobros registrados como ventas</p>
+                <div className="space-y-1.5">
+                  {data.ventasPedido.map(v => (
+                    <div key={v.id} className="flex items-center justify-between gap-2 bg-gray-800/40 rounded-lg px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-white text-xs font-medium truncate">{v.nombre_arreglo}</p>
+                        <p className="text-gray-500 text-xs">{v.notas} — {v.nombre_cliente}</p>
+                      </div>
+                      <p className="text-emerald-400 font-semibold text-xs whitespace-nowrap">{formatMoney(v.precio_venta)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Lista de pedidos activos */}
+            <div>
+              <p className="text-gray-300 font-semibold mb-2">Pedidos del mes</p>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {data.pedidos.map(p => (
+                  <div key={p.id} className="bg-gray-800/40 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-white font-medium text-xs">#{p.numero} — {p.cliente_nombre}</p>
+                      <span className={`badge text-xs ${p.estado === 'entregado' ? 'badge-green' : p.estado === 'listo' ? 'badge-blue' : p.estado === 'cancelado' ? 'badge-red' : 'badge-yellow'}`}>{p.estado}</span>
+                    </div>
+                    {p.tipo_arreglo && <p className="text-gray-400 text-xs">{p.tipo_arreglo}</p>}
+                    {p.items_resumen && <p className="text-gray-500 text-xs">Items: {p.items_resumen}</p>}
+                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                      <span>Precio: {formatMoney(p.precio)}</span>
+                      <span>Adelanto: {formatMoney(p.adelanto)}</span>
+                      <span>Saldo: {formatMoney((p.precio || 0) - (p.adelanto || 0))}</span>
+                    </div>
+                  </div>
+                ))}
+                {data.pedidos.length === 0 && <p className="text-gray-600 text-xs text-center py-4">Sin pedidos este mes</p>}
+              </div>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function PedidosPage() {
   const qc = useQueryClient();
@@ -851,6 +1083,7 @@ export default function PedidosPage() {
   const [abonando, setAbonando]   = useState(null);
   const [verMovimientos, setVerMovimientos] = useState(null);
   const [verMovimientosGlobal, setVerMovimientosGlobal] = useState(false);
+  const [verReporte, setVerReporte] = useState(false);
 
   const { data: pedidos = [] } = useQuery({
     queryKey: ['pedidos'],
@@ -937,6 +1170,9 @@ export default function PedidosPage() {
           <p className="text-gray-500 text-sm mt-0.5">Órdenes de pedido de clientes</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setVerReporte(true)} className="btn-secondary">
+            <FileText size={16} /> Reporte mes
+          </button>
           <button onClick={() => setVerMovimientosGlobal(true)} className="btn-secondary">
             <History size={16} /> Movimientos
           </button>
@@ -998,6 +1234,9 @@ export default function PedidosPage() {
         )}
         {verMovimientosGlobal && (
           <MovimientosGlobalModal onClose={() => setVerMovimientosGlobal(false)} />
+        )}
+        {verReporte && (
+          <ReporteMesModal onClose={() => setVerReporte(false)} />
         )}
       </AnimatePresence>
 
