@@ -835,6 +835,55 @@ async function revertirVenta(req, res) {
   }
 }
 
+async function getDuplicados(req, res) {
+  try {
+    const duplicados = await query(`
+      SELECT c.id, c.nombre, c.precio_venta, c.categoria,
+        (SELECT COUNT(*) FROM ficha_ingredientes fi WHERE fi.catalogo_id = c.id) AS total_ingredientes,
+        (SELECT c2.id FROM catalogo c2
+          WHERE LOWER(c2.nombre) = LOWER(c.nombre)
+            AND c2.id != c.id AND c2.activo = 1
+            AND (SELECT COUNT(*) FROM ficha_ingredientes fi2 WHERE fi2.catalogo_id = c2.id) > 0
+          LIMIT 1) AS id_con_receta
+      FROM catalogo c
+      WHERE c.activo = 1
+      HAVING total_ingredientes = 0 AND id_con_receta IS NOT NULL
+      ORDER BY c.nombre
+    `);
+    res.json({ success: true, data: duplicados, total: duplicados.length });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
+async function limpiarDuplicados(req, res) {
+  try {
+    const duplicados = await query(`
+      SELECT c.id, c.nombre FROM catalogo c
+      WHERE c.activo = 1
+        AND (SELECT COUNT(*) FROM ficha_ingredientes fi WHERE fi.catalogo_id = c.id) = 0
+        AND EXISTS (
+          SELECT 1 FROM catalogo c2
+          WHERE LOWER(c2.nombre) = LOWER(c.nombre)
+            AND c2.id != c.id AND c2.activo = 1
+            AND (SELECT COUNT(*) FROM ficha_ingredientes fi2 WHERE fi2.catalogo_id = c2.id) > 0
+        )
+    `);
+    if (duplicados.length === 0) {
+      return res.json({ success: true, eliminados: 0, mensaje: 'No hay duplicados sin receta' });
+    }
+    const ids = duplicados.map(d => d.id);
+    const ph = ids.map(() => '?').join(',');
+    await query(`DELETE FROM ficha_ingredientes WHERE catalogo_id IN (${ph})`, ids);
+    await query(`DELETE FROM catalogo WHERE id IN (${ph})`, ids);
+    logger.info(`limpiarDuplicados: ${ids.length} eliminados — ${duplicados.map(d => d.nombre).join(', ')}`);
+    res.json({ success: true, eliminados: ids.length, nombres: duplicados.map(d => d.nombre) });
+  } catch (e) {
+    logger.error(`limpiarDuplicados: ${e.message}`);
+    res.status(500).json({ success: false, message: e.message });
+  }
+}
+
 async function importarDesdePhp(req, res) {
   try {
     const resultado = await phpCatalogSync.importarDesdePhp();
@@ -882,4 +931,4 @@ async function fixMarkupVentasHoy(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, ensurePagoMixto, fixMarkupVentasHoy, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp };
+module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, ensurePagoMixto, fixMarkupVentasHoy, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp, getDuplicados, limpiarDuplicados };

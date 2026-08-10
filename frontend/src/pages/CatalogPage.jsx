@@ -565,10 +565,11 @@ function ArregloModal({ arreglo, insumos, onClose, onSave, isPending }) {
 
 export default function CatalogPage() {
   const qc = useQueryClient();
-  const [fichaModal,     setFichaModal]     = useState(null);
-  const [editModal,      setEditModal]      = useState(null);
-  const [busqueda,       setBusqueda]       = useState('');
-  const [confirmarBorrar, setConfirmarBorrar] = useState(null);
+  const [fichaModal,       setFichaModal]       = useState(null);
+  const [editModal,        setEditModal]        = useState(null);
+  const [busqueda,         setBusqueda]         = useState('');
+  const [confirmarBorrar,  setConfirmarBorrar]  = useState(null);
+  const [modalDuplicados,  setModalDuplicados]  = useState(null); // null | { data: [] }
 
   const { data: catalogo = [] } = useQuery({
     queryKey: ['catalogo'],
@@ -601,15 +602,23 @@ export default function CatalogPage() {
     onError: (e) => toast.error(e.response?.data?.message || 'Error'),
   });
 
-  const importarPhpMut = useMutation({
-    mutationFn: () => api.post('/catalogo/importar-php'),
-    onSuccess: (res) => {
-      qc.invalidateQueries(['catalogo']);
-      const n = res.data.importados;
-      if (n > 0) toast.success(`${n} arreglo(s) importado(s) del catálogo PHP`);
-      else toast('No hay arreglos nuevos para importar', { icon: 'ℹ️' });
+  const buscarDuplicadosMut = useMutation({
+    mutationFn: () => api.get('/catalogo/duplicados').then(r => r.data),
+    onSuccess: (data) => {
+      if (data.total === 0) toast('No hay arreglos duplicados sin receta', { icon: '✅' });
+      else setModalDuplicados(data);
     },
-    onError: (e) => toast.error(e.response?.data?.message || 'Error al importar'),
+    onError: (e) => toast.error(e.response?.data?.message || 'Error'),
+  });
+
+  const limpiarDuplicadosMut = useMutation({
+    mutationFn: () => api.post('/catalogo/limpiar-duplicados').then(r => r.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries(['catalogo']);
+      setModalDuplicados(null);
+      toast.success(`${data.eliminados} arreglo(s) duplicado(s) eliminado(s)`);
+    },
+    onError: (e) => toast.error(e.response?.data?.message || 'Error'),
   });
 
   const createMut = useMutation({
@@ -661,7 +670,11 @@ export default function CatalogPage() {
           <h1 className="text-2xl font-bold text-white">Catálogo</h1>
           <p className="text-gray-500 text-sm mt-1">Arreglos, fichas técnicas y precios</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap justify-end">
+          <button onClick={() => buscarDuplicadosMut.mutate()} disabled={buscarDuplicadosMut.isPending}
+            className="btn-secondary text-yellow-400 border-yellow-600/30 hover:border-yellow-500/50">
+            <Trash2 size={15} /> Limpiar duplicados
+          </button>
           <button onClick={() => recalcularMut.mutate()} disabled={recalcularMut.isPending}
             className="btn-secondary">
             <RefreshCw size={15} className={recalcularMut.isPending ? 'animate-spin' : ''} />
@@ -802,6 +815,42 @@ export default function CatalogPage() {
                   {deleteMut.isPending ? 'Eliminando...' : 'Sí, eliminar'}
                 </button>
                 <button onClick={() => setConfirmarBorrar(null)} className="btn-secondary flex-1 justify-center">
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {modalDuplicados && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              className="card w-full max-w-lg">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-yellow-500/15 flex items-center justify-center flex-shrink-0">
+                  <Trash2 size={18} className="text-yellow-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Duplicados sin receta encontrados</h3>
+                  <p className="text-sm text-gray-400">{modalDuplicados.total} arreglo(s) sin ingredientes con un duplicado que sí tiene receta</p>
+                </div>
+              </div>
+              <div className="bg-gray-900/60 rounded-xl p-3 mb-4 max-h-56 overflow-y-auto space-y-1.5">
+                {modalDuplicados.data.map(a => (
+                  <div key={a.id} className="flex items-center justify-between gap-2">
+                    <p className="text-sm text-white">{a.nombre}</p>
+                    <span className="text-xs text-gray-500 whitespace-nowrap">{a.categoria || '—'}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mb-4">Se eliminarán los que no tienen receta. Los que sí tienen ingredientes quedan intactos.</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => limpiarDuplicadosMut.mutate()}
+                  disabled={limpiarDuplicadosMut.isPending}
+                  className="btn-danger flex-1 justify-center">
+                  {limpiarDuplicadosMut.isPending ? 'Eliminando...' : `Sí, eliminar ${modalDuplicados.total}`}
+                </button>
+                <button onClick={() => setModalDuplicados(null)} className="btn-secondary flex-1 justify-center">
                   Cancelar
                 </button>
               </div>

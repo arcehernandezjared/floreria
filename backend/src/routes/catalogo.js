@@ -19,6 +19,8 @@ router.get('/ventas', ctrl.getVentas);
 router.get('/ventas/:id/detalle', ctrl.getVentaDetalle);
 router.delete('/ventas/:id', ctrl.revertirVenta);
 router.post('/recalcular-costos', ctrl.recalcularCostos);
+router.get('/duplicados', ctrl.getDuplicados);
+router.post('/limpiar-duplicados', ctrl.limpiarDuplicados);
 router.post('/venta', ctrl.registrarVenta);
 router.post('/venta-lote', ctrl.registrarVentaLote);
 router.post('/venta-pos', ctrl.registrarVentaPOS);
