@@ -123,9 +123,9 @@ async function getDashboard(req, res) {
     // 9. Pedidos pendientes (tabla puede no existir aún)
     let pedidosPendientes = { count: 0, proximos: [] };
     try {
-      const pp = await queryOne("SELECT COUNT(*) as count FROM pedidos WHERE estado = 'pendiente'");
+      const pp = await queryOne("SELECT COUNT(*) as count FROM pedidos WHERE estado = 'pendiente' AND eliminado_en IS NULL");
       const proximos = await query(
-        "SELECT id, numero, cliente_nombre, hora_entrega, fecha FROM pedidos WHERE estado = 'pendiente' ORDER BY fecha ASC, hora_entrega ASC LIMIT 5"
+        "SELECT id, numero, cliente_nombre, hora_entrega, fecha FROM pedidos WHERE estado = 'pendiente' AND eliminado_en IS NULL ORDER BY fecha ASC, hora_entrega ASC LIMIT 5"
       );
       pedidosPendientes = { count: parseInt(pp.count), proximos };
     } catch (_) {}
