@@ -874,6 +874,8 @@ async function limpiarDuplicados(req, res) {
     }
     const ids = duplicados.map(d => d.id);
     const ph = ids.map(() => '?').join(',');
+    // Desligar ventas que referencien estos IDs antes de borrar (FK constraint)
+    await query(`UPDATE ventas_floreria SET catalogo_id = NULL WHERE catalogo_id IN (${ph})`, ids);
     await query(`DELETE FROM ficha_ingredientes WHERE catalogo_id IN (${ph})`, ids);
     await query(`DELETE FROM catalogo WHERE id IN (${ph})`, ids);
     logger.info(`limpiarDuplicados: ${ids.length} eliminados — ${duplicados.map(d => d.nombre).join(', ')}`);
