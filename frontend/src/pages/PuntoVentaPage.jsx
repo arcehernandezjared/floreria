@@ -447,6 +447,8 @@ export default function PuntoVentaPage() {
   const [categoriaVG, setCategoriaVG]         = useState('');   // para venta general
   const [modalCategorias, setModalCategorias] = useState(false);
   const [buscarCategoria, setBuscarCategoria] = useState('');
+  const [modalCategoriasArr, setModalCategoriasArr] = useState(false);
+  const [buscarCategoriaArr, setBuscarCategoriaArr] = useState('');
   const [orden, setOrden]           = useState('nombre');
   const [carrito, setCarrito]       = useState([]);
   const [cliente, setCliente]       = useState('');
@@ -724,9 +726,12 @@ export default function PuntoVentaPage() {
     setCarrito(prev => prev.map(i => i._key === key ? { ...i, precio_venta: Number(valor) } : i));
   };
 
-  const categoriasArreglos = [...new Set(
-    catalogo.filter(a => a.activo && a.categoria && parseInt(a.total_ingredientes || 0) > 0).map(a => a.categoria)
-  )].sort();
+  // Deduplicar por nombre normalizado (trim + lowercase) para evitar carpetas repetidas
+  const categoriasArreglos = [...new Map(
+    catalogo
+      .filter(a => a.activo && a.categoria && parseInt(a.total_ingredientes || 0) > 0)
+      .map(a => [a.categoria.trim().toLowerCase(), a.categoria.trim()])
+  ).values()].sort((a, b) => a.localeCompare(b, 'es'));
 
   const TIPO_ORDER = { flor: 0, material: 1, empaque: 2, otro: 3 };
 
@@ -751,7 +756,7 @@ export default function PuntoVentaPage() {
     .filter(a => a.activo &&
       parseInt(a.total_ingredientes || 0) > 0 &&
       (!busqueda || a.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (a.codigo && a.codigo.toLowerCase() === busqueda.toLowerCase().trim())) &&
-      (!categoriaFiltro || a.categoria === categoriaFiltro)
+      (!categoriaFiltro || (a.categoria || '').trim().toLowerCase() === categoriaFiltro.trim().toLowerCase())
     )
     .sort(sortFn);
 
@@ -842,23 +847,29 @@ export default function PuntoVentaPage() {
           )}
         </div>
 
-        {/* Arreglos: pills de subcategoría */}
-        {tab === 'arreglos' && categoriasArreglos.length > 0 && (
-          <div className="flex gap-2 flex-wrap mb-3 flex-shrink-0">
-            <button onClick={() => setCategoriaFiltro('')}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!categoriaFiltro ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-              Todos ({catalogo.filter(a => a.activo && parseInt(a.total_ingredientes || 0) > 0).length})
+        {/* Arreglos: botón categorías + chip activa */}
+        {tab === 'arreglos' && (
+          <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+            <button onClick={() => setModalCategoriasArr(true)}
+              className="btn-secondary flex items-center gap-2 text-sm px-3 flex-shrink-0">
+              <LayoutGrid size={15} /> Categorías
+              {categoriaFiltro && <span className="w-2 h-2 rounded-full bg-brand-400 flex-shrink-0" />}
             </button>
-            {categoriasArreglos.map(cat => {
-              const count = catalogo.filter(a => a.activo && parseInt(a.total_ingredientes || 0) > 0 && a.categoria === cat).length;
-              return (
-                <button key={cat}
-                  onClick={() => setCategoriaFiltro(p => p === cat ? '' : cat)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${categoriaFiltro === cat ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-                  {cat} ({count})
-                </button>
-              );
-            })}
+            {categoriaFiltro ? (
+              <>
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-600/20 border border-brand-500/40 text-brand-300 text-xs font-medium">
+                  {categoriaFiltro}
+                  <button onClick={() => setCategoriaFiltro('')} className="hover:text-white transition-colors ml-0.5">
+                    <X size={11} />
+                  </button>
+                </span>
+                <span className="text-xs text-gray-600">{catalogoFiltrado.length} arreglos</span>
+              </>
+            ) : (
+              <span className="text-xs text-gray-600">
+                {catalogoFiltrado.length} arreglos · {categoriasArreglos.length} categorías
+              </span>
+            )}
           </div>
         )}
 
@@ -1256,6 +1267,65 @@ export default function PuntoVentaPage() {
 
       {/* ── Modal Categorías ── */}
       <AnimatePresence>
+        {modalCategoriasArr && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="card w-full max-w-lg flex flex-col" style={{ maxHeight: '80vh' }}>
+
+              <div className="flex items-center justify-between mb-4 flex-shrink-0">
+                <div>
+                  <h3 className="text-white font-bold text-lg">Categorías de arreglos</h3>
+                  <p className="text-xs text-gray-500">{categoriasArreglos.length} categorías</p>
+                </div>
+                <button onClick={() => { setModalCategoriasArr(false); setBuscarCategoriaArr(''); }}
+                  className="text-gray-500 hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="relative mb-4 flex-shrink-0">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input className="input w-full pl-9 text-sm" placeholder="Buscar categoría..."
+                  value={buscarCategoriaArr} onChange={e => setBuscarCategoriaArr(e.target.value)} autoFocus />
+              </div>
+
+              <div className="overflow-y-auto flex-1 pr-1">
+                <div className="grid grid-cols-2 gap-2">
+                  {categoriasArreglos
+                    .filter(cat => !buscarCategoriaArr || cat.toLowerCase().includes(buscarCategoriaArr.toLowerCase()))
+                    .map(cat => {
+                      const count = catalogo.filter(a => a.activo && parseInt(a.total_ingredientes || 0) > 0 && (a.categoria || '').trim().toLowerCase() === cat.trim().toLowerCase()).length;
+                      const activa = categoriaFiltro.trim().toLowerCase() === cat.trim().toLowerCase();
+                      return (
+                        <button key={cat}
+                          onClick={() => { setCategoriaFiltro(cat); setModalCategoriasArr(false); setBuscarCategoriaArr(''); }}
+                          className={`flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-all
+                            bg-brand-500/10 border-brand-500/25 hover:border-brand-400/60
+                            ${activa ? 'ring-2 ring-brand-500 ring-offset-1 ring-offset-gray-900' : ''}`}>
+                          <span className={`text-sm font-medium truncate ${activa ? 'text-white' : 'text-brand-300'}`}>{cat}</span>
+                          <span className="text-xs text-gray-500 ml-2 flex-shrink-0 bg-gray-800/60 px-1.5 py-0.5 rounded-full">{count}</span>
+                        </button>
+                      );
+                    })}
+                  {categoriasArreglos.filter(c => !buscarCategoriaArr || c.toLowerCase().includes(buscarCategoriaArr.toLowerCase())).length === 0 && (
+                    <p className="text-gray-600 text-sm text-center py-6 col-span-2">No se encontró esa categoría</p>
+                  )}
+                </div>
+              </div>
+
+              {categoriaFiltro && (
+                <div className="pt-3 border-t border-gray-800 mt-3 flex-shrink-0">
+                  <button onClick={() => { setCategoriaFiltro(''); setModalCategoriasArr(false); setBuscarCategoriaArr(''); }}
+                    className="btn-secondary w-full text-sm">
+                    Quitar filtro · Ver todos los arreglos
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+
         {modalCategorias && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
