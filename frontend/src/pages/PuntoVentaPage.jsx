@@ -725,7 +725,7 @@ export default function PuntoVentaPage() {
   };
 
   const categoriasArreglos = [...new Set(
-    catalogo.filter(a => a.activo && a.categoria).map(a => a.categoria)
+    catalogo.filter(a => a.activo && a.categoria && parseInt(a.total_ingredientes || 0) > 0).map(a => a.categoria)
   )].sort();
 
   const TIPO_ORDER = { flor: 0, material: 1, empaque: 2, otro: 3 };
@@ -749,6 +749,7 @@ export default function PuntoVentaPage() {
 
   const catalogoFiltrado = catalogo
     .filter(a => a.activo &&
+      parseInt(a.total_ingredientes || 0) > 0 &&
       (!busqueda || a.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (a.codigo && a.codigo.toLowerCase() === busqueda.toLowerCase().trim())) &&
       (!categoriaFiltro || a.categoria === categoriaFiltro)
     )
@@ -846,10 +847,10 @@ export default function PuntoVentaPage() {
           <div className="flex gap-2 flex-wrap mb-3 flex-shrink-0">
             <button onClick={() => setCategoriaFiltro('')}
               className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${!categoriaFiltro ? 'bg-brand-600 border-brand-500 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}`}>
-              Todos ({catalogo.filter(a => a.activo).length})
+              Todos ({catalogo.filter(a => a.activo && parseInt(a.total_ingredientes || 0) > 0).length})
             </button>
             {categoriasArreglos.map(cat => {
-              const count = catalogo.filter(a => a.activo && a.categoria === cat).length;
+              const count = catalogo.filter(a => a.activo && parseInt(a.total_ingredientes || 0) > 0 && a.categoria === cat).length;
               return (
                 <button key={cat}
                   onClick={() => setCategoriaFiltro(p => p === cat ? '' : cat)}

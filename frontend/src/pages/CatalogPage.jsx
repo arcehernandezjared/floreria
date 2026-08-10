@@ -662,11 +662,6 @@ export default function CatalogPage() {
           <p className="text-gray-500 text-sm mt-1">Arreglos, fichas técnicas y precios</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => importarPhpMut.mutate()} disabled={importarPhpMut.isPending}
-            className="btn-secondary">
-            <RefreshCw size={15} className={importarPhpMut.isPending ? 'animate-spin' : ''} />
-            Importar de catálogo PHP
-          </button>
           <button onClick={() => recalcularMut.mutate()} disabled={recalcularMut.isPending}
             className="btn-secondary">
             <RefreshCw size={15} className={recalcularMut.isPending ? 'animate-spin' : ''} />

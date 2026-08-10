@@ -83,7 +83,8 @@ async function getCatalogo(req, res) {
       `SELECT c.*,
         (SELECT COALESCE(SUM(fi.cantidad * i.costo_unitario), 0)
          FROM ficha_ingredientes fi JOIN insumos i ON fi.insumo_id = i.id
-         WHERE fi.catalogo_id = c.id) as costo_dinamico
+         WHERE fi.catalogo_id = c.id) as costo_dinamico,
+        (SELECT COUNT(*) FROM ficha_ingredientes fi WHERE fi.catalogo_id = c.id) as total_ingredientes
        FROM catalogo c
        WHERE c.activo = 1
        ORDER BY c.nombre`
