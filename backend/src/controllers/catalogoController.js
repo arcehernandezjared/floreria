@@ -919,4 +919,49 @@ async function fixMarkupVentasHoy(req, res) {
   }
 }
 
-module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, ensurePagoMixto, fixMarkupVentasHoy, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp, getDuplicados, limpiarDuplicados };
+async function migrarImagenesCloudinary(req, res) {
+  const CLOUDINARY_PREFIX = 'https://res.cloudinary.com';
+  const resultados = { ok: 0, errores: [] };
+
+  async function migrarFila(tabla, id, urlCloudinary) {
+    try {
+      const resp = await fetch(urlCloudinary, { redirect: 'follow' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} descargando imagen`);
+      const contentType = resp.headers.get('content-type') || 'image/jpeg';
+      const buffer = Buffer.from(await resp.arrayBuffer());
+
+      const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+      const filename = `migrado_${tabla}_${id}.${ext}`;
+      const nuevaUrl = await uploadToHostinger(buffer, contentType, filename);
+
+      await query(`UPDATE ${tabla} SET imagen_url = ? WHERE id = ?`, [nuevaUrl, id]);
+      resultados.ok++;
+      logger.info(`migrarImagenes: ${tabla}#${id} → ${nuevaUrl}`);
+    } catch (err) {
+      resultados.errores.push({ tabla, id, error: err.message });
+      logger.error(`migrarImagenes: ${tabla}#${id} → ${err.message}`);
+    }
+  }
+
+  try {
+    const arreglos = await query(`SELECT id, imagen_url FROM catalogo WHERE imagen_url LIKE '${CLOUDINARY_PREFIX}%'`);
+    const insumos  = await query(`SELECT id, imagen_url FROM insumos  WHERE imagen_url LIKE '${CLOUDINARY_PREFIX}%'`);
+
+    logger.info(`migrarImagenes: ${arreglos.length} arreglos + ${insumos.length} insumos en Cloudinary`);
+
+    for (const row of arreglos) await migrarFila('catalogo', row.id, row.imagen_url);
+    for (const row of insumos)  await migrarFila('insumos',  row.id, row.imagen_url);
+
+    res.json({
+      success: true,
+      migradas: resultados.ok,
+      errores: resultados.errores,
+      mensaje: `${resultados.ok} imagen(es) migradas a Hostinger${resultados.errores.length ? `, ${resultados.errores.length} con error` : ''}`,
+    });
+  } catch (error) {
+    logger.error(`migrarImagenesCloudinary: ${error.message}`);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+module.exports = { ensureCodigo, ensureCanalPedido, ensureFormaPago, ensurePagoMixto, fixMarkupVentasHoy, getCatalogo, getArregloConFicha, createArreglo, updateArreglo, deleteArreglo, recalcularCostos, registrarVenta, registrarVentaLote, registrarVentaPOS, getVentas, getVentaDetalle, uploadImagen, ventaPersonalizada, revertirVenta, importarDesdePhp, getDuplicados, limpiarDuplicados, migrarImagenesCloudinary };
