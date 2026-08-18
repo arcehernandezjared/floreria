@@ -708,29 +708,15 @@ async function getVentaDetalle(req, res) {
   }
 }
 
-const { v2: cloudinary } = require('cloudinary');
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:    process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const { uploadToHostinger } = require('../utils/uploadHostinger');
 
 async function uploadImagen(req, res) {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No se recibió ninguna imagen' });
     }
-
-    const result = await new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        { folder: 'floreria-arreglos', resource_type: 'image' },
-        (error, result) => error ? reject(error) : resolve(result)
-      );
-      stream.end(req.file.buffer);
-    });
-
-    res.json({ success: true, url: result.secure_url });
+    const url = await uploadToHostinger(req.file.buffer, req.file.mimetype, req.file.originalname);
+    res.json({ success: true, url });
   } catch (error) {
     logger.error(`uploadImagen: ${error.message}`);
     res.status(500).json({ success: false, message: error.message });
