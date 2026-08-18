@@ -25,11 +25,18 @@ async function uploadToHostinger(buffer, mimetype, originalname) {
     body: form,
   });
 
+  if (resp.status === 404) {
+    throw new Error(`El archivo upload.php no existe en Hostinger (${uploadUrl}). Verifica que esté subido a public_html/api/upload.php`);
+  }
+  if (resp.status === 401) {
+    throw new Error('Token incorrecto: verifica que HOSTINGER_UPLOAD_TOKEN coincida con el token en upload.php');
+  }
+
   let data;
   try {
     data = await resp.json();
   } catch {
-    throw new Error(`Respuesta inválida del servidor de imágenes (HTTP ${resp.status})`);
+    throw new Error(`Respuesta inválida del servidor de imágenes (HTTP ${resp.status}). Verifica que upload.php esté bien configurado.`);
   }
 
   if (!resp.ok || !data.success) {
