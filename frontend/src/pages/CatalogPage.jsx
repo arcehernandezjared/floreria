@@ -621,17 +621,6 @@ export default function CatalogPage() {
     onError: (e) => toast.error(e.response?.data?.message || 'Error'),
   });
 
-  const migrarImagenesMut = useMutation({
-    mutationFn: () => api.post('/catalogo/migrar-imagenes-cloudinary').then(r => r.data),
-    onSuccess: (data) => {
-      toast.success(data.mensaje, { duration: 6000 });
-      if (data.errores?.length) {
-        console.warn('Errores en migración:', data.errores);
-        toast(`${data.errores.length} imagen(es) no se pudieron migrar — ver consola`, { icon: '⚠️', duration: 8000 });
-      }
-    },
-    onError: (e) => toast.error(e.response?.data?.message || 'Error al migrar imágenes'),
-  });
 
   const createMut = useMutation({
     mutationFn: (data) => api.post('/catalogo', data),
@@ -683,14 +672,7 @@ export default function CatalogPage() {
           <p className="text-gray-500 text-sm mt-1">Arreglos, fichas técnicas y precios</p>
         </div>
         <div className="flex gap-3 flex-wrap justify-end">
-          <button
-            onClick={() => { if (window.confirm('¿Migrar todas las imágenes de Cloudinary a Hostinger? Esto puede tardar unos segundos.')) migrarImagenesMut.mutate(); }}
-            disabled={migrarImagenesMut.isPending}
-            className="btn-secondary text-blue-400 border-blue-600/30 hover:border-blue-500/50">
-            {migrarImagenesMut.isPending ? <RefreshCw size={15} className="animate-spin" /> : <ImagePlus size={15} />}
-            {migrarImagenesMut.isPending ? 'Migrando...' : 'Migrar a Hostinger'}
-          </button>
-          <button onClick={() => buscarDuplicadosMut.mutate()} disabled={buscarDuplicadosMut.isPending}
+<button onClick={() => buscarDuplicadosMut.mutate()} disabled={buscarDuplicadosMut.isPending}
             className="btn-secondary text-yellow-400 border-yellow-600/30 hover:border-yellow-500/50">
             <Trash2 size={15} /> Limpiar duplicados
           </button>
