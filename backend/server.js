@@ -85,6 +85,45 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', sistema: 'Floristería Alma Caribeña', timestamp: new Date() });
 });
 
+// Endpoint temporal para diagnosticar/corregir fechas de ventas
+// Protegido con token; eliminar después de usarlo
+app.get('/api/admin/fechas', async (req, res) => {
+  const { query: dbQuery } = require('./src/config/database');
+  if (req.query.token !== 'alma2026fix') return res.status(403).json({ error: 'Acceso denegado' });
+  try {
+    const [tzInfo] = await dbQuery('SELECT NOW() as now_utc, @@session.time_zone as tz_sesion, @@global.time_zone as tz_global');
+    const ventas = await dbQuery(`
+      SELECT id, nombre_arreglo, nombre_cliente, canal,
+             fecha AS fecha_utc_raw,
+             CONVERT_TZ(fecha, '+00:00', '-06:00') AS fecha_cr
+      FROM ventas_floreria
+      WHERE DATE(fecha) IN ('2026-08-22','2026-08-23')
+      ORDER BY fecha
+    `);
+    res.json({ tzInfo, ventas });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/fechas/corregir', async (req, res) => {
+  const { query: dbQuery } = require('./src/config/database');
+  if (req.query.token !== 'alma2026fix') return res.status(403).json({ error: 'Acceso denegado' });
+  try {
+    const ventas = await dbQuery(`
+      SELECT id, fecha FROM ventas_floreria
+      WHERE DATE(fecha) = '2026-08-23'
+        AND (nombre_cliente = 'Cliente mostrador' OR canal = 'mostrador')
+    `);
+    if (ventas.length === 0) return res.json({ corregidas: 0, mensaje: 'No se encontraron registros' });
+    const ids = ventas.map(v => v.id);
+    await dbQuery(`UPDATE ventas_floreria SET fecha = DATE_SUB(fecha, INTERVAL 12 HOUR) WHERE id IN (${ids.join(',')})`);
+    res.json({ corregidas: ids.length, ids, mensaje: 'Ventas movidas 12h atrás (domingo AM → sábado PM)' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Auto-ping para evitar que Render Free Tier duerma el servidor.
 // Solo se activa en producción donde RENDER_EXTERNAL_URL está disponible.
 function startKeepAlive() {
