@@ -110,15 +110,17 @@ app.post('/api/admin/fechas/corregir', async (req, res) => {
   const { query: dbQuery } = require('./src/config/database');
   if (req.query.token !== 'alma2026fix') return res.status(403).json({ error: 'Acceso denegado' });
   try {
+    // Solo los registros del domingo 23 ago entre 14:45-14:46 UTC (= 8:45 AM CR)
+    // IDs 2002-2011, los que el usuario registró como ventas del sábado en la noche
     const ventas = await dbQuery(`
       SELECT id, fecha FROM ventas_floreria
-      WHERE DATE(fecha) = '2026-08-23'
-        AND (nombre_cliente = 'Cliente mostrador' OR canal = 'mostrador')
+      WHERE fecha >= '2026-08-23 14:45:00' AND fecha < '2026-08-23 14:46:00'
     `);
     if (ventas.length === 0) return res.json({ corregidas: 0, mensaje: 'No se encontraron registros' });
     const ids = ventas.map(v => v.id);
+    // Mover 12h atrás: 2026-08-23 14:45 UTC → 2026-08-23 02:45 UTC = sábado 8:45 PM CR
     await dbQuery(`UPDATE ventas_floreria SET fecha = DATE_SUB(fecha, INTERVAL 12 HOUR) WHERE id IN (${ids.join(',')})`);
-    res.json({ corregidas: ids.length, ids, mensaje: 'Ventas movidas 12h atrás (domingo AM → sábado PM)' });
+    res.json({ corregidas: ids.length, ids, mensaje: 'Ventas movidas al sábado 22 ago, 8:45 PM CR' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
