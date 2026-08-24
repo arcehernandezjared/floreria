@@ -6,7 +6,7 @@ import {
   Flower2, Package, MapPin, Calendar, Banknote, CreditCard, Smartphone, Wallet
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import api, { hoyCR } from '../utils/api';
+import api, { hoyCR, formatDateTime } from '../utils/api';
 import toast from 'react-hot-toast';
 
 const CANAL_LABELS = {
@@ -153,8 +153,8 @@ function generarReciboPDF(venta) {
 function ModalEmail({ venta, onClose }) {
   const [email, setEmail] = useState('');
   const precio = parseFloat(venta.precio_venta || 0);
-  const fecha  = new Date(venta.fecha).toLocaleString('es-CR');
-  const numero = `VTA-${new Date(venta.fecha).getFullYear()}-${String(venta.id).padStart(6, '0')}`;
+  const fecha  = formatDateTime(venta.fecha);
+  const numero = `VTA-${new Date(venta.fecha).toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }).split('-')[0]}-${String(venta.id).padStart(6, '0')}`;
 
   const mutation = useMutation({
     mutationFn: () => api.post('/ventas/enviar-recibo', {
@@ -665,7 +665,7 @@ export default function RegistroVentasPage() {
               const CanalIcon = canalInfo.icon;
               const pagoInfo = FORMA_PAGO_LABELS[v.forma_pago] || { label: v.forma_pago || '—', color: 'text-gray-400 bg-gray-700' };
               const PagoIcon = pagoInfo.icon;
-              const fecha = new Date(v.fecha).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Costa_Rica' });
+              const fecha = formatDateTime(v.fecha);
               return (
                 <div key={v.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -736,7 +736,7 @@ export default function RegistroVentasPage() {
                 const CanalIcon = canalInfo.icon;
                 const pagoInfo  = FORMA_PAGO_LABELS[v.forma_pago] || { label: v.forma_pago || '—', color: 'text-gray-400 bg-gray-700' };
                 const PagoIcon  = pagoInfo.icon;
-                const fecha     = new Date(v.fecha).toLocaleDateString('es-CR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Costa_Rica' });
+                const fecha     = formatDateTime(v.fecha);
                 return (
                   <tr key={v.id} className="hover:bg-gray-800/30 transition-colors">
                     <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">{fecha}</td>

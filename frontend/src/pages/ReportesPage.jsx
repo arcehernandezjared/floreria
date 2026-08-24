@@ -9,7 +9,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js';
-import api, { formatMoney, hoyCR } from '../utils/api';
+import api, { formatMoney, hoyCR, formatDate, formatDateTime } from '../utils/api';
 import { motion } from 'framer-motion';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -214,7 +214,7 @@ function exportPDF(tab, data, periodo) {
       (data.detalle || []).slice(0, 50).map(v => [
         v.nombre_arreglo, fmtPDF(v.precio_venta), fmtPDF(v.costo_produccion),
         CANAL_ES[v.canal] || v.canal, v.nombre_cliente || '-',
-        new Date(v.fecha).toLocaleDateString('es-CR')
+        formatDate(v.fecha)
       ])
     );
   }
@@ -266,7 +266,7 @@ function exportPDF(tab, data, periodo) {
       (data.detalle || []).slice(0, 60).map(m => [
         m.insumo, parseFloat(m.cantidad).toFixed(1), fmtPDF(m.costo_total),
         MOTIVO_ES[m.motivo] || m.motivo, m.notas || '-',
-        new Date(m.fecha).toLocaleDateString('es-CR')
+        formatDate(m.fecha)
       ])
     );
   }
@@ -426,7 +426,7 @@ function exportExcel(tab, data, periodo) {
       (data.detalle || []).map(m => [
         m.insumo, parseFloat(m.cantidad), parseFloat(m.costo_total),
         MOTIVO_ES[m.motivo] || m.motivo, m.notas || '',
-        new Date(m.fecha).toLocaleDateString('es-CR')
+        formatDate(m.fecha)
       ])
     );
   }
@@ -579,7 +579,7 @@ function ReporteVentas({ data }) {
         rows={(data.detalle || []).map(v => [
           v.nombre_arreglo, formatMoney(v.precio_venta), formatMoney(v.costo_produccion),
           CANAL_ES[v.canal] || v.canal, v.nombre_cliente || '—',
-          new Date(v.fecha).toLocaleDateString('es-CR')
+          formatDateTime(v.fecha)
         ])}
       />
     </div>
@@ -699,7 +699,7 @@ function ReporteMermas({ data }) {
         rows={(data.detalle || []).map(m => [
           m.insumo, parseFloat(m.cantidad).toFixed(1), formatMoney(m.costo_total),
           MOTIVO_ES[m.motivo] || m.motivo, m.notas || '—',
-          new Date(m.fecha).toLocaleDateString('es-CR')
+          formatDateTime(m.fecha)
         ])}
       />
     </div>

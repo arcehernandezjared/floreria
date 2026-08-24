@@ -23,16 +23,17 @@ async function connectDB() {
       }
     });
 
-    // El driver asume que toda fecha guardada en MySQL es UTC (timezone:'+00:00'
-    // arriba, y todas las consultas que usan CONVERT_TZ(col,'+00:00','-06:00')
-    // para mostrar hora de Costa Rica). Pero por defecto la sesión de MySQL usa
-    // el reloj del sistema operativo (SYSTEM), que en este servidor YA está en
-    // hora de Costa Rica (UTC-6) — así que NOW()/CURRENT_TIMESTAMP devolvían hora
-    // local pero el driver la leía como si fuera UTC, desfasando todo 6 horas.
-    // Forzamos cada conexión del pool a usar UTC real para que coincida con lo
-    // que el resto del código ya asume.
-    pool.on('connection', (conn) => {
-      conn.query("SET time_zone = '+00:00'");
+    // El servidor MySQL puede estar en zona horaria de Costa Rica (UTC-6).
+    // Forzamos SET time_zone = '+00:00' en cada conexión usando 'acquire'
+    // (que dispara en cada getConnection()) con un WeakSet para no repetirlo,
+    // garantizando que NOW() devuelva UTC antes de cualquier query.
+    const tzSet = new WeakSet();
+    pool.on('acquire', (conn) => {
+      if (tzSet.has(conn)) return;
+      tzSet.add(conn);
+      conn.query("SET time_zone = '+00:00'", (err) => {
+        if (err) logger.warn(`SET time_zone: ${err.message}`);
+      });
     });
 
     const connection = await pool.getConnection();

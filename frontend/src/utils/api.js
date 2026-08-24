@@ -28,9 +28,19 @@ export const formatMoney = (amount, symbol = '₡') => {
   return `${symbol}${Number(amount).toLocaleString('es-CR', { maximumFractionDigits: 0 })}`;
 };
 
+const CR_TZ = { timeZone: 'America/Costa_Rica' };
+
+// Formatea cualquier valor fecha/datetime a hora de Costa Rica.
+// Acepta ISO string, Date object, o string MySQL "YYYY-MM-DD HH:MM:SS".
 export const formatDate = (date) => {
   if (!date) return '';
-  return new Date(date).toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Costa_Rica' });
+  return new Date(date).toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit', year: 'numeric', ...CR_TZ });
+};
+
+export const formatDateTime = (date) => {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date.replace(' ', 'T')) : new Date(date);
+  return isNaN(d) ? '' : d.toLocaleString('es-CR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', ...CR_TZ });
 };
 
 // Fecha de "hoy" en zona horaria de Costa Rica, formato YYYY-MM-DD.
