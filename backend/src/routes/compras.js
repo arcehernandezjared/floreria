@@ -7,6 +7,7 @@ router.use(authMiddleware);
 router.get('/', ctrl.getCompras);
 router.get('/:id', ctrl.getCompra);
 router.post('/', ctrl.createCompra);
+router.put('/:id', ctrl.updateCompra);
 router.post('/:id/recibir', ctrl.recibirCompra);
 router.delete('/:id', ctrl.eliminarCompra);
 
