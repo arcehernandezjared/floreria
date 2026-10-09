@@ -1,6 +1,7 @@
 const { Resend } = require('resend');
 const logger = require('../utils/logger');
 const { query } = require('../config/database');
+const { recalcularCierre } = require('./cierresController');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -153,7 +154,21 @@ async function registrarVentaManual(req, res) {
     );
 
     logger.info(`Venta manual registrada: ${concepto || 'Venta general'} ₡${monto} el ${fecha}`);
-    res.status(201).json({ success: true, message: 'Venta registrada', id: result.insertId });
+
+    // Si ese día ya tenía cierre de caja, actualizarlo para que incluya esta venta
+    let cierreActualizado = false;
+    try {
+      cierreActualizado = !!(await recalcularCierre(fecha));
+    } catch (e) {
+      logger.error(`registrarVentaManual: no se pudo recalcular el cierre del ${fecha}: ${e.message}`);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: cierreActualizado ? `Venta registrada y cierre del ${fecha} actualizado` : 'Venta registrada',
+      id: result.insertId,
+      cierre_actualizado: cierreActualizado
+    });
   } catch (e) {
     logger.error(`registrarVentaManual: ${e.message}`);
     res.status(500).json({ success: false, message: e.message });

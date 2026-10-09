@@ -237,6 +237,52 @@ async function createCierre(req, res) {
   }
 }
 
+// ── Recalcular un cierre ya guardado ───────────────────────────────────────
+// El cierre guarda una "foto" de los totales del día. Si después se registra
+// (venta manual) o se revierte una venta con fecha de un día ya cerrado, hay
+// que recalcular esa foto. Se conservan monto_inicial, efectivo contado y notas.
+// Devuelve null si ese día no tiene cierre (no hay nada que recalcular).
+async function recalcularCierre(fecha) {
+  const cierre = await queryOne('SELECT * FROM cierres_dia WHERE fecha = ?', [fecha]);
+  if (!cierre) return null;
+
+  const [ventas, gastos, mermas] = await Promise.all([
+    queryOne(`SELECT COUNT(*) as count, COALESCE(SUM(precio_venta),0) as total FROM ventas_floreria WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`, [fecha]),
+    queryOne(`SELECT COALESCE(SUM(monto),0) as total FROM gastos WHERE DATE(fecha) = ?`, [fecha]),
+    queryOne(`SELECT COALESCE(SUM(costo_total),0) as total FROM mermas WHERE DATE(CONVERT_TZ(fecha, '+00:00', '-06:00')) = ?`, [fecha]),
+  ]);
+
+  // La provisión de nómina solo se recalcula si su quincena sigue abierta;
+  // si ya se pagó (cerrado = 1) se respeta la provisión que quedó registrada.
+  let provision = parseFloat(cierre.costos_total) || 0;
+  const fondo = await queryOne('SELECT cerrado FROM fondo_quincena_log WHERE fecha = ?', [fecha]);
+  if (!fondo || !fondo.cerrado) {
+    try {
+      const resultado = await registrarProvisionNomina(fecha, parseFloat(ventas.total));
+      provision = resultado ? resultado.provision : 0;
+    } catch (nomErr) {
+      logger.error(`recalcularCierre: error al recalcular provisión nómina: ${nomErr.message}`);
+    }
+  }
+
+  const utilidad = parseFloat(ventas.total) - provision - parseFloat(gastos.total) - parseFloat(mermas.total);
+  const desglosePago = await getDesglosePago(fecha);
+  const montoInicial = parseFloat(cierre.monto_inicial) || 0;
+  const efectivoEsperado = montoInicial + desglosePago.efectivo;
+  const diferenciaCaja = (parseFloat(cierre.efectivo_caja) || 0) - efectivoEsperado;
+
+  await query(
+    `UPDATE cierres_dia SET ventas_count = ?, ventas_total = ?, costos_total = ?, gastos_total = ?, mermas_total = ?,
+       utilidad = ?, ventas_efectivo = ?, ventas_tarjeta = ?, ventas_sinpe = ?, efectivo_esperado = ?, diferencia_caja = ?
+     WHERE fecha = ?`,
+    [ventas.count, ventas.total, provision.toFixed(2), gastos.total, mermas.total, utilidad.toFixed(2),
+     desglosePago.efectivo, desglosePago.tarjeta, desglosePago.sinpe, efectivoEsperado, diferenciaCaja, fecha]
+  );
+
+  logger.info(`Cierre ${fecha} recalculado — ₡${ventas.total} ventas (${ventas.count}), diferencia caja ₡${diferenciaCaja.toFixed(0)}`);
+  return { fecha, ventas_total: parseFloat(ventas.total), ventas_count: Number(ventas.count) };
+}
+
 // ── Historial de cierres ───────────────────────────────────────────────────
 async function getCierres(req, res) {
   try {
@@ -283,4 +329,4 @@ async function corregirCierre(req, res) {
   }
 }
 
-module.exports = { ensureTable, checkPendiente, getSummary, createCierre, getCierres, corregirCierre };
+module.exports = { ensureTable, checkPendiente, getSummary, createCierre, getCierres, corregirCierre, recalcularCierre };

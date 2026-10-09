@@ -814,6 +814,15 @@ async function revertirVenta(req, res) {
     });
 
     logger.info(`revertirVenta: venta #${id} eliminada — ₡${venta.precio_venta}`);
+
+    // Si la venta era de un día ya cerrado, actualizar ese cierre (fecha en hora de Costa Rica)
+    try {
+      const fechaCR = new Date(venta.fecha).toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+      await require('./cierresController').recalcularCierre(fechaCR);
+    } catch (e) {
+      logger.error(`revertirVenta: no se pudo recalcular el cierre: ${e.message}`);
+    }
+
     res.json({ success: true, message: 'Venta revertida correctamente' });
   } catch (error) {
     logger.error(`revertirVenta: ${error.message}`);
