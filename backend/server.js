@@ -85,6 +85,18 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', sistema: 'Floristería Alma Caribeña', timestamp: new Date() });
 });
 
+// Verifica que la conexión a MySQL funcione (no expone credenciales, solo el código de error)
+app.get('/api/health/db', async (req, res) => {
+  const { query: dbQuery, describeError } = require('./src/config/database');
+  try {
+    await dbQuery('SELECT 1');
+    res.json({ db: 'ok' });
+  } catch (e) {
+    logger.error(`Health DB: ${describeError(e)}`);
+    res.status(500).json({ db: 'error', code: e.code || null, detalle: describeError(e) });
+  }
+});
+
 // Endpoint temporal para diagnosticar/corregir fechas de ventas
 // Protegido con token; eliminar después de usarlo
 app.get('/api/admin/fechas', async (req, res) => {

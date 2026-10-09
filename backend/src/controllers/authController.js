@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { query, queryOne } = require('../config/database');
+const { query, queryOne, describeError } = require('../config/database');
 const logger = require('../utils/logger');
 
 async function login(req, res) {
@@ -30,7 +30,7 @@ async function login(req, res) {
     const { password_hash: _, ...userData } = user;
     res.json({ success: true, token, user: userData });
   } catch (error) {
-    logger.error(`Login error: ${error.message}`);
+    logger.error(`Login error: ${describeError(error)}`);
     res.status(500).json({ success: false, message: 'Error en el servidor' });
   }
 }

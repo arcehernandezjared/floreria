@@ -13,6 +13,9 @@ async function connectDB() {
       database: process.env.DB_NAME || 'floreria',
       waitForConnections: true,
       connectionLimit: 10,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
+      connectTimeout: 15000,
       queueLimit: 0,
       timezone: '+00:00',
       charset: 'utf8mb4',
@@ -41,9 +44,24 @@ async function connectDB() {
     connection.release();
     return pool;
   } catch (error) {
-    logger.error(`Error conectando a MySQL: ${error.message}`);
+    logger.error(`Error conectando a MySQL: ${describeError(error)}`);
     process.exit(1);
   }
+}
+
+// Los errores de red de mysql2 (p.ej. AggregateError al fallar IPv4 e IPv6)
+// pueden traer `message` vacío — armamos una descripción con code/errno/sub-errores.
+function describeError(err) {
+  if (!err) return 'error desconocido';
+  const parts = [];
+  if (err.code) parts.push(err.code);
+  if (err.errno) parts.push(`errno=${err.errno}`);
+  if (err.sqlMessage) parts.push(err.sqlMessage);
+  if (err.message) parts.push(err.message);
+  if (Array.isArray(err.errors)) {
+    err.errors.forEach(e => parts.push(`[${e.code || ''} ${e.address || ''}:${e.port || ''} ${e.message || ''}]`.trim()));
+  }
+  return parts.length ? parts.join(' | ') : `${err.name || 'Error'} sin mensaje`;
 }
 
 function getPool() {
@@ -90,4 +108,4 @@ async function addColumnIfMissing(table, column, definition) {
   await query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
-module.exports = { connectDB, getPool, query, queryOne, transaction, addColumnIfMissing };
+module.exports = { connectDB, getPool, query, queryOne, transaction, addColumnIfMissing, describeError };
