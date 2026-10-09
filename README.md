@@ -2,15 +2,14 @@
 
 Sistema de gestión completo para floristería artesanal. Backend Node.js/Express/MySQL + Frontend React/Vite/Tailwind.
 
-## Credenciales de acceso
+## Acceso local
 
 | Campo | Valor |
 |-------|-------|
 | URL Frontend | http://localhost:5174 |
 | URL Backend | http://localhost:3002 |
-| Email admin | admin@floreria.com |
-| Contraseña | floreria123 |
-| Webhook API Key | floreria_webhook_key_2024 |
+
+Las credenciales y claves (usuario admin, `WEBHOOK_API_KEY`, BD, APIs) van en `backend/.env`, que **no** se sube al repositorio. Usar `backend/.env.example` como plantilla.
 
 ---
 
@@ -107,7 +106,7 @@ Endpoint para recibir ventas desde sistemas externos (ej. n8n, tienda online):
 
 ```
 POST http://localhost:3002/api/webhooks/venta-externa
-X-API-Key: floreria_webhook_key_2024
+X-API-Key: <WEBHOOK_API_KEY de backend/.env>
 Content-Type: application/json
 
 {
