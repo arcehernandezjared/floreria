@@ -8,7 +8,7 @@ async function ensureTable() {
     fecha DATE NOT NULL,
     cliente_nombre VARCHAR(200),
     cliente_telefono VARCHAR(50),
-    hora_entrega VARCHAR(20),
+    hora_entrega VARCHAR(100),
     direccion VARCHAR(500),
     tipo_arreglo VARCHAR(300),
     tributo_numero VARCHAR(50),
@@ -26,6 +26,15 @@ async function ensureTable() {
   await addColumnIfMissing('pedidos', 'adelanto_original', 'DECIMAL(12,2) DEFAULT NULL');
   await addColumnIfMissing('pedidos', 'ventas_registradas', 'TINYINT(1) DEFAULT 0');
   await addColumnIfMissing('pedidos', 'eliminado_en', 'DATETIME NULL DEFAULT NULL');
+  // hora_entrega era VARCHAR(20): MariaDB recortaba en silencio los textos largos
+  // ("Sábado 15 de agosto - 3:00 pm"), pero MySQL en modo estricto rechaza el INSERT.
+  const horaCol = await queryOne(
+    `SELECT CHARACTER_MAXIMUM_LENGTH AS largo FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = 'hora_entrega'`
+  );
+  if (horaCol && horaCol.largo < 100) {
+    await query('ALTER TABLE pedidos MODIFY hora_entrega VARCHAR(100)');
+  }
   await query(`CREATE TABLE IF NOT EXISTS pedido_items (
     id INT PRIMARY KEY AUTO_INCREMENT,
     pedido_id INT NOT NULL,

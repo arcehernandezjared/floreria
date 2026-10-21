@@ -337,7 +337,7 @@ function PedidoModal({ pedido, onClose, onSave, isPending }) {
             </div>
             <div>
               <label className="label">Hora de entrega</label>
-              <input className="input" placeholder="Ej: 2:00 PM"
+              <input className="input" placeholder="Ej: 2:00 PM" maxLength={100}
                 value={form.hora_entrega} onChange={e => set('hora_entrega', e.target.value)} />
             </div>
             <div className="col-span-2">
