@@ -45,8 +45,45 @@ const NOTIF_STYLES = {
   success: { iconBg: 'bg-emerald-500/15', iconColor: 'text-emerald-400', titleColor: 'text-emerald-300', dot: 'bg-emerald-500' },
 };
 
+// Escritorio ≥ 1280px · Tablet 768–1279px · Móvil < 768px
+const MQ_DESKTOP = '(min-width: 1280px)';
+const MQ_TABLET  = '(min-width: 768px)';
+
+function getBreakpoint() {
+  if (typeof window === 'undefined') return 'desktop';
+  if (window.matchMedia(MQ_DESKTOP).matches) return 'desktop';
+  if (window.matchMedia(MQ_TABLET).matches)  return 'tablet';
+  return 'mobile';
+}
+
+function useBreakpoint() {
+  const [bp, setBp] = useState(getBreakpoint);
+  useEffect(() => {
+    const mqs = [window.matchMedia(MQ_DESKTOP), window.matchMedia(MQ_TABLET)];
+    const update = () => setBp(getBreakpoint());
+    mqs.forEach(mq => mq.addEventListener('change', update));
+    return () => mqs.forEach(mq => mq.removeEventListener('change', update));
+  }, []);
+  return bp;
+}
+
 export default function Layout() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const bp = useBreakpoint();
+  // Cada tamaño recuerda su propio estado del menú
+  const [desktopOpen, setDesktopOpen]       = useState(true);   // escritorio: menú completo visible
+  const [tabletExpanded, setTabletExpanded] = useState(false);  // tablet: compacto (solo iconos) por defecto
+  const [mobileOpen, setMobileOpen]         = useState(false);  // móvil: menú superpuesto cerrado
+
+  const compacto    = bp === 'tablet' && !tabletExpanded;
+  const sidebarOpen = bp === 'desktop' ? desktopOpen : bp === 'tablet' ? true : mobileOpen;
+  const menuAbierto = bp === 'desktop' ? desktopOpen : bp === 'tablet' ? tabletExpanded : mobileOpen;
+  const toggleMenu  = () => {
+    if (bp === 'desktop') setDesktopOpen(v => !v);
+    else if (bp === 'tablet') setTabletExpanded(v => !v);
+    else setMobileOpen(v => !v);
+  };
+  // Al navegar: en móvil se cierra el menú; en tablet vuelve a compacto
+  const alNavegar = () => { setMobileOpen(false); setTabletExpanded(false); };
   const [showNotif, setShowNotif]     = useState(false);
   const [dismissed, setDismissed]     = useState(new Set());
   const [efectivoCierre, setEfectivoCierre] = useState('');
@@ -124,67 +161,96 @@ export default function Layout() {
     <div className="flex h-screen bg-gray-950 overflow-hidden">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
+      {/* Fondo oscuro detrás del menú superpuesto (móvil y tablet expandida) */}
+      {bp !== 'desktop' && menuAbierto && (
+        <div className="fixed inset-0 z-40 bg-black/60" onClick={alNavegar} />
+      )}
+      {/* En tablet expandida el menú flota encima: este espacio evita que el contenido salte */}
+      {bp === 'tablet' && tabletExpanded && <div className="w-20 flex-shrink-0" />}
+
       {sidebarOpen && (
-        <aside className="w-64 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden">
+        <aside className={`${
+          bp === 'desktop' ? 'w-64 flex-shrink-0'
+          : compacto       ? 'w-20 flex-shrink-0'
+          :                  'fixed inset-y-0 left-0 z-50 w-64 shadow-2xl shadow-black/50'
+        } bg-gray-900 border-r border-gray-800 flex flex-col overflow-hidden`}>
           {/* Logo */}
-          <div className="p-6 border-b border-gray-800">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-brand-500 to-brand-700 rounded-xl flex items-center justify-center">
+          <div className={`${compacto ? 'p-4' : 'p-6'} border-b border-gray-800`}>
+            <div className={`flex items-center gap-3 ${compacto ? 'justify-center' : ''}`}>
+              <div className="w-9 h-9 flex-shrink-0 bg-gradient-to-br from-brand-500 to-brand-700 rounded-xl flex items-center justify-center">
                 <Flower2 size={18} className="text-white" />
               </div>
-              <div>
-                <h1 className="font-bold text-white text-base leading-none">Alma Caribeña</h1>
-                <p className="text-xs text-gray-500 mt-0.5">Floristería</p>
-              </div>
+              {!compacto && (
+                <div className="flex-1 min-w-0">
+                  <h1 className="font-bold text-white text-base leading-none">Alma Caribeña</h1>
+                  <p className="text-xs text-gray-500 mt-0.5">Floristería</p>
+                </div>
+              )}
+              {bp === 'mobile' && (
+                <button onClick={() => setMobileOpen(false)} className="text-gray-400 hover:text-white p-1" aria-label="Cerrar menú">
+                  <X size={20} />
+                </button>
+              )}
             </div>
           </div>
 
           {/* Nav */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          <nav className={`flex-1 ${compacto ? 'p-3' : 'p-4'} space-y-1 overflow-y-auto`}>
             {NAV_ITEMS.map(({ path, icon: Icon, label, highlight }) => (
-              <NavLink key={path} to={path}
+              <NavLink key={path} to={path} onClick={alNavegar}
+                title={compacto ? label : undefined}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                  `flex items-center gap-3 ${compacto ? 'justify-center px-0' : 'px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                     isActive
                       ? 'bg-brand-600/20 text-brand-400 border border-brand-600/30'
                       : highlight
                       ? 'text-white bg-brand-600/10 border border-brand-600/20 hover:bg-brand-600/20'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'
                   }`
                 }
               >
-                <Icon size={18} />
-                {label}
+                <Icon size={18} className="flex-shrink-0" />
+                {!compacto && label}
               </NavLink>
             ))}
           </nav>
 
           {/* User */}
-          <div className="p-4 border-t border-gray-800">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-emerald-600 flex items-center justify-center text-xs font-bold text-white">
+          <div className={`${compacto ? 'p-3' : 'p-4'} border-t border-gray-800`}>
+            <div className={`flex items-center gap-3 mb-3 ${compacto ? 'justify-center' : ''}`}>
+              <div title={compacto ? user?.nombre : undefined}
+                className="w-8 h-8 flex-shrink-0 rounded-full bg-gradient-to-br from-brand-500 to-emerald-600 flex items-center justify-center text-xs font-bold text-white">
                 {user?.nombre?.charAt(0).toUpperCase()}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{user?.nombre}</p>
-                <p className="text-xs text-gray-500 capitalize">{user?.rol}</p>
-              </div>
+              {!compacto && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{user?.nombre}</p>
+                  <p className="text-xs text-gray-500 capitalize">{user?.rol}</p>
+                </div>
+              )}
             </div>
-            <button onClick={handleLogout} className="w-full btn-secondary text-sm justify-center">
-              <LogOut size={15} /> Cerrar sesión
+            <button onClick={handleLogout} title={compacto ? 'Cerrar sesión' : undefined}
+              className={`w-full btn-secondary text-sm justify-center ${compacto ? 'px-0' : ''}`}>
+              <LogOut size={15} /> {!compacto && 'Cerrar sesión'}
             </button>
           </div>
         </aside>
       )}
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
         {/* Topbar */}
-        <header className="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6 flex-shrink-0">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-white transition-colors">
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+        <header className="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-3 md:px-6 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={toggleMenu} aria-label="Menú"
+              className="text-gray-400 hover:text-white transition-colors p-1">
+              {menuAbierto ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            {bp === 'mobile' && (
+              <span className="font-semibold text-white text-sm">Alma Caribeña</span>
+            )}
+          </div>
 
           {/* Sección derecha: campana + separador + fecha — el relative engloba todo para anclar el dropdown */}
           <div className="relative flex items-center gap-3" ref={notifRef}>
@@ -219,8 +285,8 @@ export default function Layout() {
               )}
             </button>
 
-            <div className="h-4 w-px bg-gray-700" />
-            <div className="text-xs text-gray-500">
+            <div className="hidden sm:block h-4 w-px bg-gray-700" />
+            <div className="hidden sm:block text-xs text-gray-500">
               {new Date().toLocaleDateString('es-CR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
 
@@ -232,7 +298,7 @@ export default function Layout() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.97 }}
                   transition={{ duration: 0.15 }}
-                  className="fixed right-6 top-14 w-80 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl shadow-black/40 z-[9999] overflow-hidden">
+                  className="fixed left-2 right-2 sm:left-auto sm:right-6 top-14 sm:w-80 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl shadow-black/40 z-[9999] overflow-hidden">
 
                   {/* Cabecera */}
                   <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
@@ -297,7 +363,7 @@ export default function Layout() {
         </header>
 
         {/* Content */}
-        <main className={`flex-1 overflow-y-auto p-6${sidebarOpen ? ' sidebar-open' : ''}`}>
+        <main className={`flex-1 overflow-y-auto p-3 md:p-6${bp === 'desktop' && desktopOpen ? ' sidebar-open' : ''}`}>
           <Outlet />
         </main>
       </div>
