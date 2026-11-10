@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, Flower2,
   User, Tag, X, Leaf, LayoutGrid, Printer, Mail, Send, AtSign, Layers, Wand2,
-  Camera, ImagePlus, Wallet, Banknote, CreditCard, Smartphone, ClipboardList
+  Camera, ImagePlus, Wallet, Banknote, CreditCard, Smartphone, ClipboardList,
+  ChevronUp, ChevronDown
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import api, { formatMoney } from '../utils/api';
@@ -451,6 +452,15 @@ export default function PuntoVentaPage() {
   const [buscarCategoriaArr, setBuscarCategoriaArr] = useState('');
   const [orden, setOrden]           = useState('nombre');
   const [carrito, setCarrito]       = useState([]);
+  // Barra de pestañas/búsqueda/categorías plegable — se recuerda en este dispositivo
+  const [filtrosOcultos, setFiltrosOcultos] = useState(() => {
+    try { return localStorage.getItem('pos_filtros_ocultos') === '1'; } catch { return false; }
+  });
+  const toggleFiltros = () => setFiltrosOcultos(v => {
+    try { localStorage.setItem('pos_filtros_ocultos', v ? '0' : '1'); } catch { /* sin almacenamiento */ }
+    return !v;
+  });
+
   // Móvil: el carrito va debajo del catálogo; la barra "Ver carrito" se oculta cuando ya está a la vista
   const carritoRef = useRef(null);
   const [carritoVisible, setCarritoVisible] = useState(false);
@@ -812,6 +822,31 @@ export default function PuntoVentaPage() {
           </div>
         </div>
 
+        {/* Barra plegada: resumen de lo que está filtrado + flechita para volver a mostrar */}
+        {filtrosOcultos && (
+          <button onClick={toggleFiltros}
+            className="flex items-center justify-between gap-3 mb-3 flex-shrink-0 w-full px-4 py-2 rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 text-sm transition-colors">
+            <span className="flex items-center gap-2 min-w-0 text-gray-300">
+              {tab === 'arreglos' ? <LayoutGrid size={15} className="text-brand-400 flex-shrink-0" />
+                : tab === 'venta-general' ? <Layers size={15} className="text-brand-400 flex-shrink-0" />
+                : <ClipboardList size={15} className="text-brand-400 flex-shrink-0" />}
+              <span className="font-medium text-white flex-shrink-0">
+                {tab === 'arreglos' ? 'Arreglos' : tab === 'venta-general' ? 'Venta General' : 'Pedidos pendientes'}
+              </span>
+              <span className="truncate text-xs text-gray-500">
+                {[
+                  tab === 'arreglos' ? categoriaFiltro : tab === 'venta-general' ? categoriaVG : '',
+                  busqueda && `"${busqueda}"`,
+                ].filter(Boolean).join(' · ')}
+              </span>
+            </span>
+            <span className="flex items-center gap-1 text-xs text-gray-400 flex-shrink-0">
+              Mostrar filtros <ChevronDown size={16} />
+            </span>
+          </button>
+        )}
+
+        {!filtrosOcultos && (<>
         {/* Tabs tipo producto */}
         <div className="flex gap-2 mb-3 flex-shrink-0 flex-wrap">
           <button onClick={() => { setTab('arreglos'); setBusqueda(''); setCategoriaFiltro(''); }}
@@ -832,6 +867,10 @@ export default function PuntoVentaPage() {
           <button onClick={() => setModalPersonalizado(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-gray-900 text-emerald-400 hover:text-emerald-300 xl:ml-auto">
             <Wand2 size={15} /> A medida
+          </button>
+          <button onClick={toggleFiltros} title="Ocultar filtros" aria-label="Ocultar filtros"
+            className="flex items-center justify-center w-9 h-9 rounded-xl bg-gray-900 text-gray-400 hover:text-white transition-colors ml-auto xl:ml-0">
+            <ChevronUp size={18} />
           </button>
         </div>
 
@@ -905,6 +944,7 @@ export default function PuntoVentaPage() {
             )}
           </div>
         )}
+        </>)}
 
         {/* Grid — en móvil tiene alto fijo para que el carrito quede justo debajo */}
         <div className="h-[55dvh] md:h-auto md:flex-1 overflow-y-auto">
