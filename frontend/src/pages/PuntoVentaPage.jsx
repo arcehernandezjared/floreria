@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, Flower2,
@@ -451,8 +451,15 @@ export default function PuntoVentaPage() {
   const [buscarCategoriaArr, setBuscarCategoriaArr] = useState('');
   const [orden, setOrden]           = useState('nombre');
   const [carrito, setCarrito]       = useState([]);
-  // Tablet/móvil (< 1280px): el carrito es un panel que se abre con el botón flotante
-  const [carritoAbierto, setCarritoAbierto] = useState(false);
+  // Móvil: el carrito va debajo del catálogo; la barra "Ver carrito" se oculta cuando ya está a la vista
+  const carritoRef = useRef(null);
+  const [carritoVisible, setCarritoVisible] = useState(false);
+  useEffect(() => {
+    if (!carritoRef.current || typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver(([e]) => setCarritoVisible(e.isIntersecting), { threshold: 0.15 });
+    obs.observe(carritoRef.current);
+    return () => obs.disconnect();
+  }, []);
   const [cliente, setCliente]       = useState('');
   const [emailCliente, setEmailCliente] = useState('');
   const [canal, setCanal]           = useState('mostrador');
@@ -632,7 +639,6 @@ export default function PuntoVentaPage() {
       };
       setVentaSnapshot(snap);
       setModalConfirm(false);
-      setCarritoAbierto(false);
       setModalRecibo(true);
       qc.invalidateQueries(['catalogo-pos']);
       qc.invalidateQueries(['insumos-pos']);
@@ -789,10 +795,12 @@ export default function PuntoVentaPage() {
 
 
   return (
-    <div className="flex flex-row gap-2 xl:gap-6 h-[calc(100dvh-5rem)] md:h-[calc(100dvh-6.5rem)]">
+    // Móvil: catálogo arriba y carrito debajo (la página hace scroll).
+    // Tablet y escritorio: catálogo y carrito lado a lado, cada uno con su propio scroll.
+    <div className="flex flex-col md:flex-row gap-4 xl:gap-6 md:h-[calc(100dvh-6.5rem)]">
 
       {/* ── Panel Izquierdo ── */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+      <div className="md:flex-1 flex flex-col min-w-0 md:min-h-0">
 
         {/* Header — oculto en móvil para ahorrar espacio */}
         <div className="hidden lg:flex items-center justify-between mb-4 flex-shrink-0">
@@ -822,7 +830,7 @@ export default function PuntoVentaPage() {
             )}
           </button>
           <button onClick={() => setModalPersonalizado(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-gray-900 text-emerald-400 hover:text-emerald-300 ml-auto">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-gray-900 text-emerald-400 hover:text-emerald-300 xl:ml-auto">
             <Wand2 size={15} /> A medida
           </button>
         </div>
@@ -898,8 +906,8 @@ export default function PuntoVentaPage() {
           </div>
         )}
 
-        {/* Grid — en tablet/móvil deja espacio abajo para el botón flotante del carrito */}
-        <div className="flex-1 overflow-y-auto pb-24 xl:pb-0">
+        {/* Grid — en móvil tiene alto fijo para que el carrito quede justo debajo */}
+        <div className="h-[55dvh] md:h-auto md:flex-1 overflow-y-auto">
           {tab === 'pedidos-pendientes' ? (
             <div className="space-y-2">
               {pedidosPendientes.length === 0 ? (
@@ -933,7 +941,7 @@ export default function PuntoVentaPage() {
               <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : tab === 'arreglos' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
               {catalogoFiltrado.map(arreglo => {
                 const enCarrito = carrito.find(i => i._key === `cat-${arreglo.id}`);
                 return (
@@ -980,7 +988,7 @@ export default function PuntoVentaPage() {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
               {insumosFiltrados.map(insumo => {
                 const enCarrito = carrito.find(i => i._key === `ins-${insumo.id}`);
                 const stockOk = parseFloat(insumo.stock_actual) > 0;
@@ -1025,18 +1033,11 @@ export default function PuntoVentaPage() {
         </div>
       </div>
 
-      {/* ── Carrito ──
-          Escritorio (≥ 1280px): columna fija a la derecha.
-          Tablet: panel desplegable desde la derecha. Móvil: panel a pantalla completa. */}
-      {carritoAbierto && (
-        <div className="xl:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setCarritoAbierto(false)} />
-      )}
-      <div className={`${carritoAbierto
-          ? 'fixed inset-y-0 right-0 z-50 flex w-full md:w-[26rem] p-2 bg-gray-950 shadow-2xl shadow-black/60'
-          : 'hidden'
-        } xl:static xl:z-auto xl:flex xl:w-80 xl:p-0 xl:bg-transparent xl:shadow-none flex-shrink-0 flex-col min-h-0`}>
+      {/* ── Carrito — siempre en la misma pantalla ──
+          Móvil: debajo del catálogo, a todo el ancho. Tablet: columna de 288px. Escritorio: 320px. */}
+      <div ref={carritoRef} className="w-full md:w-72 xl:w-80 flex-shrink-0 flex flex-col md:min-h-0 scroll-mt-3">
 
-        <div className="card flex-1 flex flex-col p-0 overflow-hidden min-h-0">
+        <div className="card md:flex-1 flex flex-col p-0 overflow-hidden md:min-h-0">
           <div className="p-3 lg:p-4 border-b border-gray-800 flex items-center gap-2">
             <ShoppingCart size={18} className="text-brand-400" />
             <h2 className="font-semibold text-white">Carrito</h2>
@@ -1045,13 +1046,9 @@ export default function PuntoVentaPage() {
                 {carrito.length}
               </span>
             )}
-            <button onClick={() => setCarritoAbierto(false)} aria-label="Cerrar carrito"
-              className={`xl:hidden text-gray-400 hover:text-white p-1 ${carrito.length > 0 ? '' : 'ml-auto'}`}>
-              <X size={20} />
-            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="md:flex-1 md:overflow-y-auto p-3 space-y-2">
             <AnimatePresence>
               {carrito.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-center">
@@ -1280,22 +1277,18 @@ export default function PuntoVentaPage() {
         </div>
       </div>
 
-      {/* ── Botón flotante del carrito (tablet y móvil) ── */}
-      {!carritoAbierto && (
-        <button onClick={() => setCarritoAbierto(true)}
-          className={`xl:hidden fixed bottom-4 right-4 left-4 sm:left-auto z-30 flex items-center justify-between sm:justify-start gap-3 px-5 py-3.5 rounded-2xl font-semibold shadow-2xl shadow-black/50 transition-all ${
-            carrito.length > 0 ? 'bg-brand-600 hover:bg-brand-500 text-white' : 'bg-gray-800 text-gray-300 border border-gray-700'
-          }`}>
+      {/* ── Móvil: atajo para bajar al carrito (desaparece cuando el carrito ya se ve) ── */}
+      {carrito.length > 0 && !carritoVisible && (
+        <button onClick={() => carritoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className="md:hidden fixed bottom-3 left-3 right-3 z-30 flex items-center justify-between gap-3 px-5 py-3 rounded-2xl font-semibold bg-brand-600 text-white shadow-2xl shadow-black/50">
           <span className="flex items-center gap-2">
             <ShoppingCart size={18} />
-            Carrito
-            {carrito.length > 0 && (
-              <span className="bg-white text-brand-700 text-xs font-bold min-w-[1.25rem] h-5 px-1 rounded-full flex items-center justify-center">
-                {carrito.length}
-              </span>
-            )}
+            Ver carrito
+            <span className="bg-white text-brand-700 text-xs font-bold min-w-[1.25rem] h-5 px-1 rounded-full flex items-center justify-center">
+              {carrito.length}
+            </span>
           </span>
-          {carrito.length > 0 && <span className="tabular-nums">{formatMoney(totalFinal)}</span>}
+          <span className="tabular-nums">{formatMoney(totalFinal)}</span>
         </button>
       )}
 
